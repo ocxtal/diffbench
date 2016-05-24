@@ -8,6 +8,7 @@
 #include "unittest.h"
 #include "bench.h"
 #include "log.h"
+#include "aed.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
@@ -27,14 +28,7 @@ struct aed_block_s {
 	int64_t rem;
 };
 
-struct aed_fill_s {
-	int64_t score;
-	struct aed_block_s *blk;
-	int64_t rem;
-	uint64_t idx;
-};
-
-
+static inline
 struct aed_fill_s aed_fill_search_minpos(
 	int64_t arem,
 	int64_t brem,
@@ -50,9 +44,10 @@ struct aed_fill_s aed_fill_search_minpos(
 	int64_t j = blk->rem;
 	uint64_t dir = blk->dir<<(64 - j);
 
-	struct aed_fill_s hmin = { 0, 0, INT64_MAX }, vmin = { 0, 0, INT64_MAX };
+	int64_t const score_max = 100000;
+	struct aed_fill_s hmin = { score_max }, vmin = { score_max };
 
-	int64_t hscore = 0, vscore = 0;
+	int64_t hscore = score_max, vscore = score_max;
 	for(int64_t i = 0; i < 128; i++) {
 		debug("i(%lld), j(%lld), aidx(%lld), bidx(%lld), hscore(%lld), vscore(%lld), dir(%llx)",
 			i, j, (int64_t)aidx, (int64_t)bidx, hscore, vscore, dir);
@@ -363,7 +358,8 @@ int64_t aed_trace(
 	return(l);
 }
 
-
+#if 0
+static inline
 char random_base(void)
 {
 	char const table[4] = {'A', 'C', 'G', 'T'};
@@ -371,6 +367,7 @@ char random_base(void)
 	return(table[rand() % 4]);
 }
 
+static inline
 char *generate_random_sequence(int len)
 {
 	int i;
@@ -384,6 +381,7 @@ char *generate_random_sequence(int len)
 	return seq;
 }
 
+static inline
 char *generate_mutated_sequence(char *seq, int len, double x, double d, int bw)
 {
 	int i, j, wave = 0;			/** wave is q-coordinate of the alignment path */
@@ -413,6 +411,7 @@ char *generate_mutated_sequence(char *seq, int len, double x, double d, int bw)
 	return mutated_seq;
 }
 
+static inline
 uint8_t encode_base(
 	char c)
 {
@@ -435,6 +434,7 @@ uint8_t encode_base(
 	#undef _b
 }
 
+static inline
 void encode(char *ptr, int64_t len)
 {
 	for(int64_t i = 0; i < len; i++) {
@@ -443,6 +443,7 @@ void encode(char *ptr, int64_t len)
 	return;
 }
 
+static inline
 int print_cigar(char *cigar)
 {
 	char *p = cigar;
@@ -464,7 +465,6 @@ int print_cigar(char *cigar)
 	return(0);
 }
 
-#if 0
 unittest()
 {
 	uint8_t const a[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
@@ -481,7 +481,6 @@ unittest()
 	free(buf);
 }
 
-#else
 unittest()
 {
 	int64_t const len = 200;
