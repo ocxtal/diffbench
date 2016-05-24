@@ -242,7 +242,7 @@ struct aed_fill_s aed_fill(
 				b++;
 
 				debug("shift vectors right");
-				pv = (pv>>1) | 0x8000000000000000;
+				pv = (pv>>1) | ((uint64_t)0x01<<63);
 				mv = mv>>1;
 
 				debug("update vectors");
