@@ -44,7 +44,7 @@ struct aed_fill_s aed_fill_search_minpos(
 	int64_t j = blk->rem;
 	uint64_t dir = blk->dir<<(64 - j);
 
-	int64_t const score_max = 100000;
+	int64_t const score_max = INT32_MAX;
 	struct aed_fill_s hmin = { score_max }, vmin = { score_max };
 
 	int64_t hscore = score_max, vscore = score_max;
@@ -145,7 +145,12 @@ struct aed_fill_s aed_fill(
 	uint8_t const *bbase = b;
 
 	uint8_t const atail[BW] = { 0 };
-	uint8_t const btail[BW] = { 0x03 };
+	uint8_t const btail[BW] = {
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
+	};
 	uint8_t const *atlim = atail + BW, *btlim = btail + BW;
 
 	/* filled lengths */
@@ -237,8 +242,8 @@ struct aed_fill_s aed_fill(
 				b++;
 
 				debug("shift vectors right");
-				pv >>= 1;
-				mv >>= 1;
+				pv = (pv>>1) | 0x8000000000000000;
+				mv = mv>>1;
 
 				debug("update vectors");
 				_update_vectors();
@@ -255,8 +260,8 @@ struct aed_fill_s aed_fill(
 				a++;
 
 				debug("shift vectors left");
-				ph <<= 1;
-				mh <<= 1;
+				ph = (ph<<1) | 0x01;
+				mh = mh<<1;
 
 				debug("update vectors");
 				_update_vectors();

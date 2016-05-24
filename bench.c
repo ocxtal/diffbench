@@ -78,6 +78,22 @@ char *generate_mutated_sequence(char *seq, int len, double x, double d, int bw)
 }
 
 static inline
+char *add_tail(
+	char *seq,
+	char c,
+	int64_t tail_len)
+{
+	int64_t len = strlen(seq);
+	seq = realloc(seq, len + tail_len + 1);
+
+	for(int64_t i = 0; i < tail_len; i++) {
+		seq[len + i] = (c == 0) ? random_base() : c;
+	}
+	seq[len + tail_len] = '\0';
+	return(seq);
+}
+
+static inline
 uint8_t encode_base(
 	char c)
 {
@@ -147,16 +163,12 @@ struct bench_pair_s {
 
 static inline
 struct bench_pair_s bench_adaptive_editdist(
-	struct params p)
+	struct params p,
+	char const *a,
+	int64_t alen,
+	char const *b,
+	int64_t blen)
 {
-	char *a = generate_random_sequence(p.len);
-	char *b = generate_mutated_sequence(a, p.len, p.x, p.d, 1024);
-	int64_t alen = strlen(a);
-	int64_t blen = strlen(b);
-
-	encode(a, alen);
-	encode(b, blen);
-
 	void *ptr = malloc(2 * 4 * sizeof(uint64_t) * (alen + blen + 65));
 	char *buf = (char *)malloc(alen + blen);
 
@@ -176,9 +188,6 @@ struct bench_pair_s bench_adaptive_editdist(
 		int64_t len = aed_trace(buf, alen + blen, ptr, f);
 		bench_end(trace);
 	}
-
-	free(a);
-	free(b);
 	free(ptr);
 	free(buf);
 
@@ -191,17 +200,13 @@ struct bench_pair_s bench_adaptive_editdist(
 
 static inline
 struct bench_pair_s bench_ddiag_linear(
-	struct params p)
+	struct params p,
+	char const *a,
+	int64_t alen,
+	char const *b,
+	int64_t blen)
 {
-	char *a = generate_random_sequence(p.len);
-	char *b = generate_mutated_sequence(a, p.len, p.x, p.d, 1024);
-	int64_t alen = strlen(a);
-	int64_t blen = strlen(b);
-
-	encode(a, alen);
-	encode(b, blen);
-
-	struct sea_params param = { 0, 2, -3, -5, -1, 0, 0, 0, 32 };
+	struct sea_params param = { 0, 2, -3, -5, -1, 0, 0, 100, 32 };
 
 
 	struct sea_result *aln = (struct sea_result *)malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
@@ -246,12 +251,6 @@ struct bench_pair_s bench_ddiag_linear(
 			o);
 		bench_end(trace);
 	}
-
-	/**
-	 * clean malloc'd memories
-	 */
-	free(a);
-	free(b);
 	free(aln);
 	free(mat);
 
@@ -264,22 +263,18 @@ struct bench_pair_s bench_ddiag_linear(
 
 static inline
 struct bench_pair_s bench_gaba_linear(
-	struct params p)
+	struct params p,
+	char const *a,
+	int64_t alen,
+	char const *b,
+	int64_t blen)
 {
-	char *a = generate_random_sequence(p.len);
-	char *b = generate_mutated_sequence(a, p.len, p.x, p.d, 1024);
-	int64_t alen = strlen(a);
-	int64_t blen = strlen(b);
-
-	encode(a, alen);
-	encode(b, blen);
-
 	char *c = (char *)malloc(p.len);
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
 		.xdrop = 100,
-		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
+		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 4, 1)));
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
 
@@ -306,12 +301,6 @@ struct bench_pair_s bench_gaba_linear(
 		gaba_dp_clean(dp);
 	}
 	gaba_clean(ctx);
-
-	/**
-	 * clean malloc'd memories
-	 */
-	free(a);
-	free(b);
 	free(c);
 
 	return((struct bench_pair_s){
@@ -320,6 +309,8 @@ struct bench_pair_s bench_gaba_linear(
 		.score = score
 	});
 }
+
+
 
 static inline
 void print_result(
@@ -338,21 +329,16 @@ void print_result(
  */
 int main(int argc, char *argv[])
 {
-	int64_t i;
-	char *a;
-	char *b;
-	char *c;
-	struct params p;
-	bench_t fill, trace, parse;
-
-	/** set defaults */
-	p.len = 10000;
-	p.cnt = 10000;
-	p.x = 0.1;
-	p.d = 0.1;
-	p.pa = p.pb = NULL;
+	struct params p = (struct params){
+		.len = 10000,
+		.cnt = 10000,
+		.x = 0.1,
+		.d = 0.1,
+		.pa = p.pb = NULL
+	};
 
 	/** parse args */
+	int i;
 	while((i = getopt(argc, argv, "q:t:o:l:x:d:c:a:seb:h")) != -1) {
 		if(parse_args(&p, i, optarg) != 0) { exit(1); }
 	}
@@ -360,9 +346,26 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "len\t%lld\ncnt\t%lld\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
 
 
-	print_result(bench_adaptive_editdist(p));
-	print_result(bench_ddiag_linear(p));
-	print_result(bench_gaba_linear(p));
+	char *a = generate_random_sequence(p.len);
+	char *b = generate_mutated_sequence(a, p.len, p.x, p.d, 1024);
+
+	a = add_tail(a, 0, 500);
+	b = add_tail(b, 0, 500);
+
+	int64_t alen = strlen(a);
+	int64_t blen = strlen(b);
+
+	encode(a, alen);
+	encode(b, blen);
+
+
+	print_result(bench_adaptive_editdist(p, a, alen, b, blen));
+	print_result(bench_ddiag_linear(p, a, alen, b, blen));
+	print_result(bench_gaba_linear(p, a, alen, b, blen));
+
+
+	free(a);
+	free(b);
 
 	return 0;
 }
