@@ -1,0 +1,3 @@
+[submodule "gaba"]
+	path = gaba
+	url = https://github.com/ocxtal/libgaba
