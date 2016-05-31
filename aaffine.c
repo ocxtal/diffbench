@@ -12,6 +12,7 @@
  * This file requires some constant definition to compile. See naive_affine_full.c
  * and table.th for details of required definitions.
  */
+#include <stdint.h>
 #include <stdlib.h>						/* for definition of the NULL */
 
 #define BIT_WIDTH 			8
