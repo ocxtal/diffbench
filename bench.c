@@ -476,8 +476,8 @@ int main(int argc, char *argv[])
 	encode(a, alen);
 	encode(b, blen);
 
-	a = add_margin(a, alen, 16, 16);
-	b = add_margin(b, blen, 16, 16);
+	a = add_margin((uint8_t *)a, alen, 16, 16);
+	b = add_margin((uint8_t *)b, blen, 16, 16);
 
 	print_result(bench_adaptive_editdist(p, a + 16, alen, b + 16, blen));
 	print_result(bench_ddiag_linear(p, a + 16, alen, b + 16, blen));
