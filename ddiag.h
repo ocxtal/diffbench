@@ -207,6 +207,33 @@ diag_linear_dynamic_banded_matsize(
 	sea_int_t bandwidth);
 
 
+struct mpos
+diag_affine_dynamic_banded_fill(
+	struct sea_result *aln,
+	struct sea_params param,
+	char *mat);
+
+struct mpos
+diag_affine_dynamic_banded_search(
+	struct sea_result *aln,
+	struct sea_params param,
+	char *mat,
+	struct mpos o);
+
+sea_int_t
+diag_affine_dynamic_banded_trace(
+	struct sea_result *aln,
+	struct sea_params param,
+	char *mat,
+	struct mpos o);
+
+sea_int_t
+diag_affine_dynamic_banded_matsize(
+	sea_int_t alen,
+	sea_int_t blen,
+	sea_int_t bandwidth);
+
+
 #endif
 /**
  * end of ddiag.h

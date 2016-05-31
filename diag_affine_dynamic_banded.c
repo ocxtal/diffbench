@@ -1,15 +1,15 @@
 
 /**
- * @file diag_linear_dynamic_banded.c
+ * @file diag_affine_dynamic_banded.c
  *
- * @brief a linear-gap cost, banded SIMD implementation.
+ * @brief a affine-gap cost, banded SIMD implementation.
  *
  * @detail
- * This implementation is a vectorized variant of naive_linear_banded.c.
- * The consistency of the results are tested in the test_cross_diag_linear_dynamic_banded
+ * This implementation is a vectorized variant of naive_affine_dynamic_banded.c.
+ * The consistency of the results are tested in the test_cross_diag_affine_dynamic_banded
  * function.
  *
- * This file requires some constant definition to compile. See naive_linear_full.c
+ * This file requires some constant definition to compile. See naive_affine_full.c
  * and table.th for details of required definitions.
  */
 #include <stdlib.h>						/* for definition of the NULL */
@@ -26,29 +26,29 @@
  * function declarations
  */
 struct mpos
-diag_linear_dynamic_banded_fill(
+diag_affine_dynamic_banded_fill(
 	struct sea_result *aln,
 	struct sea_params param,
 	char *mat);
 
 struct mpos
-diag_linear_dynamic_banded_search(
+diag_affine_dynamic_banded_search(
 	struct sea_result *aln,
 	struct sea_params param,
 	char *mat,
 	struct mpos o);
 
 sea_int_t
-diag_linear_dynamic_banded_trace(
+diag_affine_dynamic_banded_trace(
 	struct sea_result *aln,
 	struct sea_params param,
 	char *mat,
 	struct mpos o);
 
 /**
- * @fn diag_linear_dynamic_banded
+ * @fn diag_affine_dynamic_banded
  *
- * @brief a linear-gap cost banded SIMD implementation.
+ * @brief a affine-gap cost banded SIMD implementation.
  *
  * @param[ref] aln : a pointer to a sea_result structure. aln must NOT be NULL. (a structure which contains an alignment result.)
  * @param[in] aln->a : a pointer to a query sequence a.
@@ -71,7 +71,7 @@ diag_linear_dynamic_banded_trace(
  * @return status. zero means success. see sea.h for the other error code.
  */
 sea_int_t
-diag_linear_dynamic_banded(
+diag_affine_dynamic_banded(
 	struct sea_result *aln,
 	struct sea_params param,
 	void *mat)
@@ -82,41 +82,48 @@ diag_linear_dynamic_banded(
 	/**
 	 * fill in a matrix
 	 */
-	o = diag_linear_dynamic_banded_fill(
+	o = diag_affine_dynamic_banded_fill(
 		aln, param,
-		(char *)mat + BYTES_PER_LINE);		/** barriar */
+		(char *)mat + 3 * BYTES_PER_LINE);		/** barriar */
 	/**
 	 * search maximum score position
 	 */
-	o = diag_linear_dynamic_banded_search(
+	o = diag_affine_dynamic_banded_search(
 		aln, param,
-		(char *)mat + BYTES_PER_LINE,
+		(char *)mat + 3 * BYTES_PER_LINE,		/** barriar */
 		o);
 
 #ifdef DEBUG
-	sea_int_t const bw = BAND_WIDTH;
 	fprintf(stderr, "ldmat, %d, %d\n", aln->alen+BAND_WIDTH, aln->blen+BAND_WIDTH);
-	for(int p = 0; p < o.e.p; p++) {
-		for(int q = -bw/2; q < bw/2; q++) {
-			fprintf(stderr, "%d, %d, %d\n", p, q, SCORE((char *)mat + ADDR(p, q)));
+	for(int i = 0; i < aln->alen+1; i++) {
+		for(int j = 0; j < aln->blen+1; j++) {
+			fprintf(stderr, "%d, %d, %d, %d, %d, %d\n", i, j, COP(i, j), COQ(i, j), AADDR(COP(i, j), COQ(i, j)), ASCOREV((char *)mat + AADDR(COP(i, j), COQ(i, j))));
 		}
 	}
 	fprintf(stderr, "\n");
+
+	for(int i = 0; i < 3*e.p+4; i++) {
+		for(int j = 0; j < BAND_WIDTH; j++) {
+			fprintf(stderr, "%4d, ", ASCOREV((char *)mat + i*BYTES_PER_LINE + j*BYTES_PER_CELL));
+		}
+		fprintf(stderr, "\n");
+	}
 #endif
+
 	/**
 	 * if aln->aln is not NULL and score did not overflow, do traceback.
 	 */
 	if(o.m.p < 0) { return o.m.p; }
 	if(aln->aln == NULL) { return SEA_SUCCESS; }
-	retval = diag_linear_dynamic_banded_trace(
+	retval = diag_affine_dynamic_banded_trace(
 		aln, param,
-		(char *)mat + BYTES_PER_LINE,
+		(char *)mat + 3 * BYTES_PER_LINE,		/** barriar */
 		o);
 	return(retval);
 }
 
 /**
- * @fn diag_linear_dynamic_banded_fill
+ * @fn diag_affine_dynamic_banded_fill
  *
  * @brief a matrix fill-in function.
  *
@@ -128,7 +135,7 @@ diag_linear_dynamic_banded(
  * @return an end position of the extension.
  */
 struct mpos
-diag_linear_dynamic_banded_fill(
+diag_affine_dynamic_banded_fill(
 	struct sea_result *aln,
 	struct sea_params param,
 	char *mat)
@@ -137,7 +144,8 @@ diag_linear_dynamic_banded_fill(
 	sea_int_t i, j;
 	sea_int_t m = param.m,
 			  x = param.x,
-			  g = param.gi,
+			  gi = param.gi,
+			  ge = param.ge,
 			  xdrop = param.xdrop;
 	sea_int_t apos = 0,				/** seq.a read position */
 			  bpos = 0;				/** seq.b read position */
@@ -145,22 +153,25 @@ diag_linear_dynamic_banded_fill(
 			  blen = aln->blen;
 	sea_int_t alim = alen + bw/2,
 			  blim = blen + bw/2;
-	sea_int_t dir = -1;				/** direction of the band (downward or leftward, in diag_variant.h) */
-	struct mpos o = {{0, 0, 0, 0}, {0, 0, 0, 0}};
-
+	sea_int_t dir = -1;				/** direction (DIR_H or DIR_V in diag_variant.h) */
+	struct mpos o;
+	
 	/**
 	 * declarations of SIMD registers.
 	 */
-	DECLARE_VEC_CELL_REG(mv);		/** (m, m, m, ..., m) */
-	DECLARE_VEC_CELL_REG(xv);		/** (x, x, x, ..., x) */
-	DECLARE_VEC_CELL_REG(gv);		/** (g, g, g, ..., g) */
-	DECLARE_VEC_CHAR_REG(wq);		/** a buffer for seq.a */
-	DECLARE_VEC_CHAR_REG(wt);		/** a buffer for seq.b */
-	DECLARE_VEC_CELL_REG(v);		/** score vector */
-	DECLARE_VEC_CELL_REG(pv);		/** previous score vector */
-	DECLARE_VEC_CELL_REG(tmp1);		/** temporary */
-	DECLARE_VEC_CELL_REG(tmp2);		/** temporary */
-	DECLARE_VEC_CELL_REG(maxv);		/** a vector which holds maximum scores */
+	DECLARE_VEC_CELL_REG(mv);
+	DECLARE_VEC_CELL_REG(xv);
+	DECLARE_VEC_CELL_REG(giv);
+	DECLARE_VEC_CELL_REG(gev);
+	DECLARE_VEC_CHAR_REG(wq);
+	DECLARE_VEC_CHAR_REG(wt);
+	DECLARE_VEC_CELL_REG(v);
+	DECLARE_VEC_CELL_REG(pv);
+	DECLARE_VEC_CELL_REG(f);
+	DECLARE_VEC_CELL_REG(e);
+	DECLARE_VEC_CELL_REG(tmp1);
+	DECLARE_VEC_CELL_REG(tmp2);
+	DECLARE_VEC_CELL_REG(maxv);
 
 	/**
 	 * seqreaders
@@ -171,22 +182,27 @@ diag_linear_dynamic_banded_fill(
 	CLEAR_SEQ(a, aln->a, aln->apos, aln->alen);
 	CLEAR_SEQ(b, aln->b, aln->bpos, aln->blen);
 
-	xdrop -= g;						/** compensation */
-	VEC_SET(mv, m);					/** initialize mv vector with m */
-	VEC_SET(xv, x);					/** xv with x */
-	VEC_SET(gv, g);					/** gv with g */
-	VEC_SET(maxv, CELL_MIN);		/** max score vector */
-
+	xdrop -= gi;					/** compensation */
+	VEC_SET(mv, m);					/** (m, m, m, ..., m) */
+	VEC_SET(xv, x);					/** (x, x, x, ..., x) */
+	VEC_SET(giv, gi);				/** (gi, gi, gi, ..., gi) */
+	VEC_SET(gev, ge);				/** (ge, ge, ge, ..., ge) */
+	VEC_SET(maxv, CELL_MIN);		/** init max score vector with CELL_MIN */
 	VEC_SET(pv, CELL_MIN);			/** phantom vector at p = -1 */
-	VEC_INIT_PVN(v, m, g, i);		/** initialize vector at p = 0 */
-	VEC_STORE(mat, v);
+
+	/**
+	 * initialize band at p = 0; the center cell is at (i, j) = (0, 0)
+	 */
+	VEC_INIT_PVN(v, m, gi, i); VEC_STORE(mat, v);
+	VEC_SET(f, CELL_MIN); VEC_STORE(mat, f);
+	VEC_SET(e, CELL_MIN); VEC_STORE(mat, e);
 	VEC_MAX(maxv, maxv, v);
 
 	/**
 	 * pre feed of sequences
 	 */
-	VEC_CHAR_SETZERO(wq);			/** padding of the seq.a is 0 */
-	VEC_CHAR_SETONES(wt);			/** padding of the seq.b is 0xff */
+	VEC_CHAR_SETZERO(wq);			/** padding of seq.a: 0 */
+	VEC_CHAR_SETONES(wt);			/** padding of seq.b: 0xff */
 	for(apos = 0; apos < bw/2; apos++) {
 		FETCH(a, apos); PUSHQ((apos < alen) ? DECODE(a) : 0,    wq);
 	}
@@ -195,69 +211,80 @@ diag_linear_dynamic_banded_fill(
 	}
 
 	/**
-	 * @macro DIAG_LINEAR_DBANDED_REGISTER_UPDATE
-	 * @brief a set of band advancing operations.
+	 * @macro UPDATE_FHALF
+	 * @brief a set of the first half of the band advancing operations.
 	 */
-	#define DIAG_LINEAR_DBANDED_REGISTER_UPDATE() { \
-	 	VEC_ADD(tmp1, v, gv); \
-		VEC_ADD(tmp2, tmp2, gv); \
-		VEC_MAX(tmp1, tmp1, tmp2); \
+	#define UPDATE_FHALF() { \
+		VEC_ADD(tmp1, v, giv); \
+		VEC_ADD(tmp2, f, gev); \
+		VEC_MAX(f, tmp1, tmp2); \
+		VEC_ADD(tmp2, e, gev); \
+		VEC_MAX(e, tmp1, tmp2); \
+	}
+	/**
+	 * @macro UPDATE_LHALF
+	 * @brief the last half of the operations.
+	 */
+	#define UPDATE_LHALF() { \
 		VEC_COMPARE(tmp2, wq, wt); \
 		VEC_SELECT(tmp2, xv, mv, tmp2); \
 		VEC_ADD(tmp2, pv, tmp2); \
-		VEC_MAX(tmp1, tmp1, tmp2); \
+		VEC_MAX(tmp2, f, tmp2); \
+		VEC_MAX(tmp2, e, tmp2); \
 		VEC_ASSIGN(pv, v); \
-		VEC_ASSIGN(v, tmp1); \
+		VEC_ASSIGN(v, tmp2); \
 		VEC_MAX(maxv, maxv, v); \
 	}
 
 	i = 0; j = 0;							/** the center cell of the init vector */
 	while(i < alim && j < blim) {
-		VEC_ASSIGN(tmp2, v);
+		UPDATE_FHALF();
 		if(VEC_MSB(v) > VEC_LSB(v)) {
 			if(dir == DIR_V) { VEC_SHIFT_R(pv); VEC_INSERT_MSB(pv, CELL_MIN); }
-			VEC_SHIFT_R(tmp2); VEC_INSERT_MSB(tmp2, CELL_MIN);
+			VEC_SHIFT_R(e); VEC_INSERT_MSB(e, CELL_MIN);
 			j++; dir = DIR_V;				/** go downward */
 			FETCH(b, bpos); PUSHT((bpos < blen) ? DECODE(b) : 0xff, wt); bpos++;
 		} else {
 			if(dir == DIR_H) { VEC_SHIFT_L(pv); VEC_INSERT_LSB(pv, CELL_MIN); }
-			VEC_SHIFT_L(tmp2); VEC_INSERT_LSB(tmp2, CELL_MIN);
+			VEC_SHIFT_L(f); VEC_INSERT_LSB(f, CELL_MIN);
 			i++; dir = DIR_H;				/** go rightward */
 			FETCH(a, apos); PUSHQ((apos < alen) ? DECODE(a) : 0, wq); apos++;
 		}
-		DIAG_LINEAR_DBANDED_REGISTER_UPDATE();
-		VEC_STORE(mat, v);
+		UPDATE_LHALF();
+		VEC_STORE(mat, v); VEC_STORE(mat, f); VEC_STORE(mat, e);
 		if(ALG == NW && COP(i, j) == COP(alen, blen)) { break; }
 		if(ALG == XSEA && VEC_CENTER(v) + xdrop - VEC_CENTER(maxv) < 0) { break; }
 	}
 	#undef VEC_SW_MAX
 	#undef VEC_SEA_MAX
-	#undef DIAG_LINEAR_DBANDED_REGISTER_UPDATE
+	#undef UPDATE_FHALF
+	#undef UPDATE_LHALF
 
 	aln->len = COP(alim, blim);
 	o.e.i = i; o.e.j = j;
-	o.e.p = COP(i, j); o.e.q = COQ(i, j);	/** e.q == 0; */
+	o.e.p = COP(i, j); o.e.q = COQ(i, j);		/** o.e.q == 0 */
 	if(ALG != NW) {
-		VEC_STORE(mat, maxv);
+		VEC_STORE(mat, maxv);					/** store max vector at the end of the memory */
 		VEC_ASSIGN(tmp1, maxv);
 		for(i = 1; i < bw; i++) {
 			VEC_SHIFT_R(tmp1);
-			VEC_MAX(maxv, tmp1, maxv);		/** extract maximum score in the maxv vector */
+			VEC_MAX(maxv, tmp1, maxv);			/** extract maximum score in the maxv vector */ 
 		}
-		VEC_STORE(mat, maxv);				/** store max vector at the end of the memory */
+		VEC_STORE(mat, maxv);					/** store max of the max vector */
 	}
 	return(o);
 }
 
+
 /**
- * @fn diag_linear_dynamic_banded_search
+ * @fn diag_affine_dynamic_banded_search
  *
  * @brief search a cell with maximal score.
  *
  * @return a struct mpos which contains maximal score position.
  */
 struct mpos
-diag_linear_dynamic_banded_search(
+diag_affine_dynamic_banded_search(
 	struct sea_result *aln,
 	struct sea_params param,
 	char *mat,
@@ -267,46 +294,54 @@ diag_linear_dynamic_banded_search(
 					bc = BYTES_PER_CELL,
 					bl = BYTES_PER_LINE;
 
-	sea_int_t i, j, p, q;
-	char *lmat = mat + ADDR(o.e.p+1, -bw/2),
-		 *tmat, *pl, *pu;					
-	sea_int_t max = SCORE(lmat + bl);
-
-	o.m.i = o.m.j = o.m.p = o.m.q = 0;
-	if(max == CELL_MAX) { o.m.p = SEA_ERROR_OVERFLOW; return(o); }
-	if(max == 0) { return(o); } /** wind back to (0, 0) if no meaningful score was found */
-	for(q = -bw/2; q < bw/2; q++, lmat += bc) {
-		if(SCORE(lmat) == max) {
-			i = o.e.i - q; j = o.e.j + q;
-			pl = mat + ADDR(o.e.p-1, bw/2-1);
-			pu = mat + ADDR(o.e.p-1, -bw/2);
-			for(p = o.e.p, tmat = lmat-bl;
-				p >= 0 && SCORE(tmat) != max;
-				p--, tmat -= bl) {
-				if(SCORE(pl) > SCORE(pu)) { j--; } else { i--; }
-				pl -= bl; pu -= bl;
-			}
-			if(p >= o.m.p) { o.m.i = i; o.m.j = j; o.m.p = p; o.m.q = q; }
+	if(ALG == NW) {
+		o.m.i = aln->alen; o.m.j = aln->blen;
+		o.m.p = o.e.p; o.m.q = COQ(o.m.i, o.m.j) - o.e.q;
+		if(o.m.p != COP(aln->alen, aln->blen) || o.m.q > bw/2-1 || o.m.q < -bw/2) {
+			o.m.p = SEA_ERROR_OUT_OF_BAND; return(o);
 		}
+	} else {	/** ALG == SEA or ALG == SW */
+		sea_int_t i, j, p, q;
+		char *lmat = mat + AADDR(o.e.p+1, -bw/2),
+			 *tmat, *pl, *pu;
+		sea_int_t max = ASCOREV(lmat + bl);
+
+		o.m.i = o.m.j = o.m.p = o.m.q = 0;
+		if(max == CELL_MAX) { o.m.p = SEA_ERROR_OVERFLOW; return(o); }
+		if(max == 0) { return(o); } /** wind back to (0, 0) if no meaningful score was found */
+		for(q = -bw/2; q < bw/2; q++, lmat += bc) {
+			if(ASCOREV(lmat) == max) {
+				i = o.e.i - q; j = o.e.j + q;
+				pl = mat + AADDR(o.e.p-1, bw/2-1);
+				pu = mat + AADDR(o.e.p-1, -bw/2);
+				for(p = o.e.p, tmat = lmat-3*bl;
+					p >= 0 && ASCOREV(tmat) != max;
+					p--, tmat -= 3*bl) {
+					if(ASCOREV(pl) > ASCOREV(pu)) { j--; } else { i--; }
+					pl -= 3*bl; pu -= 3*bl;
+				}
+				if(p >= o.m.p) { o.m.i = i; o.m.j = j; o.m.p = p; o.m.q = q; }
+			}
+		}
+		aln->alen = o.m.i;
+		aln->blen = o.m.j;
 	}
-	aln->alen = o.m.i;
-	aln->blen = o.m.j;
-	aln->score = SCORE(mat + ADDR(o.m.p, o.m.q));
+	aln->score = ASCOREV(mat + AADDR(o.m.p, o.m.q));
 	return(o);
 }
 
 /**
- * @fn diag_linear_dynamic_banded_trace
+ * @fn diag_affine_dynamic_banded_trace
  *
  * @brief traceback function.
  *
  * @param aln : a pointer to struct sea_result.
  * @param mat : a pointer to dynamic programming matrix.
  * @param matlen : the length of the p-coordinate of the matrix.
- * @param mpos : the start position of the trace.
+ * @param m : the start position of the trace.
  */
 sea_int_t
-diag_linear_dynamic_banded_trace(
+diag_affine_dynamic_banded_trace(
 	struct sea_result *aln,
 	struct sea_params param,
 	char *mat,
@@ -320,11 +355,12 @@ diag_linear_dynamic_banded_trace(
 			  mq = o.m.q;
 	sea_int_t m = param.m,
 			  x = param.x,
-			  g = param.gi;
-	char *tmat = (char *)mat + ADDR(mp, mq),
-		 *pu = (char *)mat + ADDR(mp-1, -bw/2),
-		 *pl = (char *)mat + ADDR(mp-1, bw/2-1);
-	sea_int_t score, cost, diag, v, h, dir;
+			  gi = param.gi,
+			  ge = param.ge;
+	char *tmat = (char *)mat + AADDR(mp, mq),
+		 *pu = (char *)mat + AADDR(mp-1, -bw/2),
+		 *pl = (char *)mat + AADDR(mp-1, bw/2-1);
+	sea_int_t score, dir;
 
 	char *p = aln->aln + aln->len - 1;
 	char type = '\0';
@@ -346,29 +382,41 @@ diag_linear_dynamic_banded_trace(
 	}
 
 	#define DET_DIR(dir, pl, pu) { \
-		(dir) = (SCORE(pl) > SCORE(pu)) ? DIR_V : DIR_H; \
-		(pl) -= bl; (pu) -= bl; \
+		(dir) = (ASCOREV(pl) > ASCOREV(pu)) ? DIR_V : DIR_H; \
+		(pl) -= 3*bl; (pu) -= 3*bl; \
 	}
 
-	score = SCORE(tmat);
-	dir = 0; DET_DIR(dir, pl, pu);
+	score = ASCOREV(tmat);
+	dir = 0;
 	while(mi > 0 || mj > 0) {
 		DET_DIR(dir, pl, pu);
-		diag = SCORE(tmat + DTOPLEFT(dir));
-		if(score == ((v = SCORE(tmat + DTOP(dir))) + g)) {
-			tmat += DTOP(dir); score = v;
+		if(score == ASCOREF(tmat)) {
+			while(ASCOREV(tmat) == ASCOREV(tmat + DATOP(dir)) + ge) {
+				tmat += DATOP(dir); DET_DIR(dir, pl, pu);
+				mj--;
+				PUSH(p, type, len, 'I');
+			}
+			tmat += DATOP(dir);
 			mj--;
 			PUSH(p, type, len, 'I');
-		} else if(score == ((h = SCORE(tmat + DLEFT(dir))) + g)) {
-			tmat += DLEFT(dir); score = h;
+			score = ASCOREV(tmat);
+		} else if(score == ASCOREE(tmat)) {
+			while(ASCOREV(tmat) == ASCOREV(tmat + DALEFT(dir)) + ge) {
+				tmat += DALEFT(dir); DET_DIR(dir, pl, pu);
+				mi--;
+				PUSH(p, type, len, 'D');
+			}
+			tmat += DALEFT(dir);
 			mi--;
 			PUSH(p, type, len, 'D');
+			score = ASCOREV(tmat);
 		} else {
-			tmat += DTOPLEFT(dir); DET_DIR(dir, pl, pu);
+			tmat += DALEFT(dir); DET_DIR(dir, pl, pu);
+			tmat += DATOP(dir);
 			mi--;
 			mj--;
 			PUSH(p, type, len, 'M');
-			score = diag;
+			score = ASCOREV(tmat);
 		}
 	}
 
@@ -386,9 +434,9 @@ diag_linear_dynamic_banded_trace(
 }
 
 /**
- * @fn diag_linear_dynamic_banded_matsize
+ * @fn diag_affine_dynamic_banded_matsize
  *
- * @brief returns the size of matrix for diag_linear_dynamic_banded, in bytes.
+ * @brief returns the size of matrix for diag_affine_dynamic_banded, in bytes.
  *
  * @param[in] alen : the length of the input sequence a (in base pairs).
  * @param[in] blen : the length of the input sequence b (in base pairs).
@@ -397,13 +445,13 @@ diag_linear_dynamic_banded_trace(
  * @return the size of a matrix in bytes.
  */
 sea_int_t
-diag_linear_dynamic_banded_matsize(
+diag_affine_dynamic_banded_matsize(
 	sea_int_t alen,
 	sea_int_t blen,
 	sea_int_t bandwidth)
 {
 	/** barriar (1) + matrix (alen+blen+bw) + max vectors (2) */
-	return((1 + alen + blen + bandwidth + 2) * BYTES_PER_LINE);
+	return(3 * (1 +	alen + blen + bandwidth + 2) * BYTES_PER_LINE);
 }
 
 #if 0
@@ -439,12 +487,12 @@ int main(int argc, char *argv[])
 	aln.len = alnlen;
 
 	alnlen = aln.alen + aln.blen;
-	matlen = diag_linear_dynamic_banded_matsize(
+	matlen = diag_affine_dynamic_banded_matsize(
 		aln.alen, aln.blen, param.bandwidth);
 
 	aln.aln = (void *)malloc(alnlen);
 	mat = (void *)malloc(matlen);
-	diag_linear_dynamic_banded(&aln, param, mat);
+	diag_affine_dynamic_banded(&aln, param, mat);
 
 	printf("%d, %d, %s\n", aln.score, aln.len, aln.aln);
 
@@ -465,21 +513,21 @@ int main(int argc, char *argv[])
 #if !(BAND_WIDTH == 32 && BIT_WIDTH == 8 && ALG == XSEA)
 
 extern sea_int_t
-naive_linear_banded_matsize(
+naive_affine_dynamic_banded_matsize, DEFAULT_SUFFIX)(
 	sea_int_t alen,
 	sea_int_t blen,
 	sea_int_t bandwidth);
 
 extern sea_int_t
-naive_linear_banded(
+naive_affine_dynamic_banded, DEFAULT_SUFFIX)(
 	struct sea_result *aln,
 	struct sea_params param,
 	void *mat);
 
 /**
- * @fn test_2_diag_linear_dynamic_banded
+ * @fn test_2_diag_affine_dynamic_banded
  *
- * @brief a unittest function of diag_linear_dynamic_banded.
+ * @brief a unittest function of diag_affine_dynamic_banded.
  *
  * @detail
  * This function is an aggregation of simple fixed ascii queries.
@@ -491,19 +539,20 @@ naive_linear_banded(
  * to dumps.log.
  */
 void
-test_2_diag_linear_dynamic_banded(
+test_2_diag_affine_dynamic_banded(
 	void)
 {
 	sea_int_t m = 2,
 			  x = -3,
-			  g = -4;
+			  gi = -4,
+			  ge = -1;
 	struct sea_context *ctx;
 
 	ctx = sea_init_fp(
 		SEA_BANDWIDTH_64,
-		diag_linear_dynamic_banded,
-		diag_linear_dynamic_banded_matsize,
-		m, x, g, 0,			/** the default blast scoring scheme */
+		diag_affine_dynamic_banded,
+		diag_affine_dynamic_banded_matsize,
+		m, x, gi, ge,		/** the default blast scoring scheme */
 		12);				/** xdrop threshold */
 
 	/**
@@ -555,10 +604,10 @@ test_2_diag_linear_dynamic_banded(
 		/**
 		 * the Needleman-Wunsch algorithm
 		 */
-		sea_assert_align(ctx, "A", 				"AA", 			g+m,			"IM");
-		sea_assert_align(ctx, "A", 				"AAA", 			g+g+m,			"IIM");
-		sea_assert_align(ctx, "AAAA", 			"AA", 			g+g+m+m,		"DDMM");
-		sea_assert_align(ctx, "TTTT", 			"TTTTTTTT", 	4*g+4*m,		"IIIIMMMM");
+		sea_assert_align(ctx, "A", 				"AA", 			gi+m,			"IM");
+		sea_assert_align(ctx, "A", 				"AAA", 			gi+ge+m,		"IIM");
+		sea_assert_align(ctx, "AAAA", 			"AA", 			gi+ge+m+m,		"DDMM");
+		sea_assert_align(ctx, "TTTT", 			"TTTTTTTT", 	gi+3*ge+4*m,	"IIIIMMMM");
 	} else if(ALG == SEA || ALG == SW || ALG == XSEA) {
 		/**
 		 * the Smith-Waterman algorithm and the seed-and-extend algorithm
@@ -580,30 +629,34 @@ test_2_diag_linear_dynamic_banded(
 	/**
 	 * when gaps with a base occurs on seq a (insertion).
 	 */
-	sea_assert_align(ctx, "AAAAATTTT", 		"AAAAAGTTTT", 	9*m+g,			"MMMMMIMMMM");
-	sea_assert_align(ctx, "TTTTCCCCC", 		"TTTTACCCCC", 	9*m+g,			"MMMMIMMMMM");
-	sea_assert_align(ctx, "CCCGGGGGG", 		"CCCTGGGGGG", 	9*m+g,			"MMMIMMMMMM");
-	sea_assert_align(ctx, "GGGAATTT", 		"GGGCAAGTTT", 	8*m+2*g,		"MMMIMMIMMM");
+	sea_assert_align(ctx, "AAAAATTTT", 		"AAAAAGTTTT", 	9*m+gi,			"MMMMMIMMMM");
+	sea_assert_align(ctx, "TTTTCCCCC", 		"TTTTACCCCC", 	9*m+gi,			"MMMMIMMMMM");
+	sea_assert_align(ctx, "CCCGGGGGG", 		"CCCTGGGGGG", 	9*m+gi,			"MMMIMMMMMM");
+	sea_assert_align(ctx, "GGGAATTT", 		"GGGCAAGTTT", 	8*m+2*gi,		"MMMIMMIMMM");
 
 	/**
 	 * when gaps with a base occurs on seq b (deletion).
 	 */
-	sea_assert_align(ctx, "AAAAAGTTTT", 	"AAAAATTTT", 	9*m+g,			"MMMMMDMMMM");
-	sea_assert_align(ctx, "TTTTACCCCC", 	"TTTTCCCCC", 	9*m+g,			"MMMMDMMMMM");
-	sea_assert_align(ctx, "CCCTGGGGGG", 	"CCCGGGGGG", 	9*m+g,			"MMMDMMMMMM");
-	sea_assert_align(ctx, "GGGCAAGTTT", 	"GGGAATTT", 	8*m+2*g,		"MMMDMMDMMM");
+	sea_assert_align(ctx, "AAAAAGTTTT", 	"AAAAATTTT", 	9*m+gi,			"MMMMMDMMMM");
+	sea_assert_align(ctx, "TTTTACCCCC", 	"TTTTCCCCC", 	9*m+gi,			"MMMMDMMMMM");
+	sea_assert_align(ctx, "CCCTGGGGGG", 	"CCCGGGGGG", 	9*m+gi,			"MMMDMMMMMM");
+	sea_assert_align(ctx, "GGGCAAGTTT", 	"GGGAATTT", 	8*m+2*gi,		"MMMDMMDMMM");
 
 	/**
 	 * when a gap longer than two bases occurs on seq a.
 	 */
-	sea_assert_align(ctx, "AAAAATTTTT", 	"AAAAAGGTTTTT", 10*m+2*g,		"MMMMMIIMMMMM");
-	sea_assert_align(ctx, "TTTAAAAGGG", 	"TTTCAAAACGGG", 10*m+2*g,		"MMMIMMMMIMMM");
+	sea_assert_align(ctx, "AAAATTTT", 		"AAAAGGTTTT", 	8*m+gi+ge,		"MMMMIIMMMM");
+	sea_assert_align(ctx, "GGGGCCCC", 		"GGGGTTTCCCC", 	8*m+gi+2*ge,	"MMMMIIIMMMM");
+	sea_assert_align(ctx, "GGGGGCCCCC", 	"GGGGGTTTTCCCCC",10*m+gi+3*ge,	"MMMMMIIIIMMMMM");
+	sea_assert_align(ctx, "TTTTAAGGGG", 	"TTTTCCAACCGGGG",10*m+2*gi+2*ge,"MMMMIIMMIIMMMM");
 
 	/**
 	 * when a gap longer than two bases occurs on seq b.
 	 */
-	sea_assert_align(ctx, "AAAAAGGTTTTT",	"AAAAATTTTT", 	10*m+2*g,		"MMMMMDDMMMMM");
-	sea_assert_align(ctx, "TTTCAAAACGGG", 	"TTTAAAAGGG", 	10*m+2*g,	 	"MMMDMMMMDMMM");
+	sea_assert_align(ctx, "AAAAGGTTTT",	 	"AAAATTTT", 	8*m+gi+ge,		"MMMMDDMMMM");
+	sea_assert_align(ctx, "GGGGTTTCCCC",	"GGGGCCCC", 	8*m+gi+2*ge,	"MMMMDDDMMMM");
+	sea_assert_align(ctx, "GGGGGTTTTCCCCC",	"GGGGGCCCCC", 	10*m+gi+3*ge,	"MMMMMDDDDMMMMM");
+	sea_assert_align(ctx, "TTTTCCAACCGGGG", "TTTTAAGGGG", 	10*m+2*gi+2*ge, "MMMMDDMMDDMMMM");
 
 	/**
 	 * when outer gaps occurs.
@@ -634,21 +687,22 @@ test_2_diag_linear_dynamic_banded(
 }
 
 /**
- * @fn test_8_cross_diag_linear_dynamic_banded
+ * @fn test_8_cross_diag_affine_dynamic_banded
  *
- * @brief cross test between naive_linear_banded and diag_linear_dynamic_banded
+ * @brief cross test between naive_affine_dynamic_banded and diag_affine_dynamic_banded
  */
 #if HAVE_NAIVE_BANDED
 
 void
-test_8_cross_diag_linear_dynamic_banded(
+test_8_cross_diag_affine_dynamic_banded(
 	void)
 {
 	int i;
 	int const cnt = 5;
 	sea_int_t m = 2,
 			  x = -3,
-			  g = -4;
+			  gi = -4,
+			  ge = -1;
 	char *a, *b;
 	struct sea_context *full, *band;
 
@@ -662,15 +716,15 @@ test_8_cross_diag_linear_dynamic_banded(
 
 	full = sea_init_fp(
 		SEA_BANDWIDTH_64,
-		naive_linear_banded,
-		naive_linear_banded_matsize,
-		m, x, g, 0,
+		naive_affine_dynamic_banded, DEFAULT_SUFFIX),
+		naive_affine_dynamic_banded_matsize, DEFAULT_SUFFIX),
+		m, x, gi, ge,
 		10000);
 	band = sea_init_fp(
 		SEA_BANDWIDTH_64,
-		diag_linear_dynamic_banded,
-		diag_linear_dynamic_banded_matsize,
-		m, x, g, 0,
+		diag_affine_dynamic_banded,
+		diag_affine_dynamic_banded_matsize,
+		m, x, gi, ge,
 		10000);
 
 
@@ -693,6 +747,7 @@ test_8_cross_diag_linear_dynamic_banded(
 #endif	/* #if SEQ == ascii && ALN == ascii */
 #endif	/* #ifdef TEST */
 #endif
+
 /**
- * end of diag_linear_dynamic_banded.c
+ * end of diag_affine_dynamic_banded.c
  */

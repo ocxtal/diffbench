@@ -262,6 +262,7 @@
  	#error "invalid value of SEQ"
 #endif
 
+#if 0
 /**
  * alignment writer macros
  *
@@ -350,7 +351,7 @@
 	
 	#define CLEAR_ALN(name, ptr, len) { \
 		_##name##alnbase = ptr; \
-		_##name##alnptr = ptr; \
+		_##name##alnptr = ptr + len; \
 		_##name##c = 'R'; \
 		_##name##cnt = 0; \
 		_##name##l = 0; \
@@ -396,6 +397,7 @@
 	#define LENGTH(name) 			( _##name##l + _##name##cnt )
 #else
  	#error "invalid value of ALN"
+#endif
 #endif
 
 #endif /* #ifndef _SEQREADER_H_INCLUDED */

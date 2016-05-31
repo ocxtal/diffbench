@@ -242,7 +242,7 @@ struct bench_pair_s bench_ddiag_linear(
 			o);
 		score += aln->score;
 		bench_end(fill);
-		
+
 
 		bench_start(trace);
 		diag_linear_dynamic_banded_trace(
@@ -262,7 +262,119 @@ struct bench_pair_s bench_ddiag_linear(
 }
 
 static inline
+struct bench_pair_s bench_ddiag_affine(
+	struct params p,
+	char const *a,
+	int64_t alen,
+	char const *b,
+	int64_t blen)
+{
+	struct sea_params param = { 0, 2, -3, -5, -1, 0, 0, 100, 32 };
+
+
+	struct sea_result *aln = (struct sea_result *)malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
+	aln->aln = (void *)((struct sea_result *)aln + 1);
+	((char *)(aln->aln))[0] = 0;
+	aln->score = 0;
+	aln->ctx = NULL;
+
+
+	int64_t alnsize = diag_affine_dynamic_banded_matsize(alen, blen, 32);
+	void *mat = malloc(alnsize);
+
+
+	bench_t fill, trace;
+	bench_init(fill);
+	bench_init(trace);
+
+	int64_t score = 0;
+	for(int64_t i = 0; i < p.cnt; i++) {
+		aln->score = 0;
+		aln->a = a; aln->apos = 0; aln->alen = alen;
+		aln->b = b; aln->bpos = 0; aln->blen = blen;
+		aln->len = alnsize;
+
+
+		bench_start(fill);
+		struct mpos o = diag_affine_dynamic_banded_fill(
+			aln, param,
+			(char *)mat + 32 * 3 * sizeof(int16_t));
+		o = diag_affine_dynamic_banded_search(
+			aln, param,
+			(char *)mat + 32 * 3 * sizeof(int16_t),
+			o);
+		score += aln->score;
+		bench_end(fill);
+
+
+		bench_start(trace);
+		diag_affine_dynamic_banded_trace(
+			aln, param,
+			(char *)mat + 32 * 3 * sizeof(int16_t),
+			o);
+		bench_end(trace);
+	}
+	free(aln);
+	free(mat);
+
+	return((struct bench_pair_s){
+		.fill = fill,
+		.trace = trace,
+		.score = score
+	});
+}
+
+static inline
 struct bench_pair_s bench_gaba_linear(
+	struct params p,
+	char const *a,
+	int64_t alen,
+	char const *b,
+	int64_t blen)
+{
+	char *c = (char *)malloc(p.len);
+
+	/** init context */
+	gaba_t *ctx = gaba_init(GABA_PARAMS(
+		.xdrop = 100,
+		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 0, 5)));
+	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
+	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
+
+	bench_t fill, trace;
+	bench_init(fill);
+	bench_init(trace);
+
+	void const *lim = (void const *)0x800000000000;
+
+	int64_t score = 0;
+	for(int64_t i = 0; i < p.cnt; i++) {
+		// gaba_dp_flush(dp, lim, lim);
+		gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
+
+		bench_start(fill);
+		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0);
+		score += f->max;
+		bench_end(fill);
+		
+		bench_start(trace);
+		struct gaba_result_s *r = gaba_dp_trace(dp, f, NULL, NULL);
+		gaba_dp_dump_cigar(c, p.len, r->path->array, r->path->offset, r->path->len);
+		bench_end(trace);
+		gaba_dp_clean(dp);
+	}
+	gaba_clean(ctx);
+	free(c);
+
+	return((struct bench_pair_s){
+		.fill = fill,
+		.trace = trace,
+		.score = score
+	});
+}
+
+static inline
+struct bench_pair_s bench_gaba_affine(
 	struct params p,
 	char const *a,
 	int64_t alen,
@@ -361,7 +473,9 @@ int main(int argc, char *argv[])
 
 	print_result(bench_adaptive_editdist(p, a, alen, b, blen));
 	print_result(bench_ddiag_linear(p, a, alen, b, blen));
+	print_result(bench_ddiag_affine(p, a, alen, b, blen));
 	print_result(bench_gaba_linear(p, a, alen, b, blen));
+	print_result(bench_gaba_affine(p, a, alen, b, blen));
 
 
 	free(a);
