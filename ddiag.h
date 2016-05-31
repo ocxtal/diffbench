@@ -166,14 +166,10 @@ struct mpos {
 /**
  * include SIMD intrinsic macros, depending on the value of BIT_WIDTH.
  */
-#ifndef ARCH
-#define ARCH 	SSE
-#endif
-
-#if ARCH == SSE
-	#include "x86_64/sse.h"
-#elif ARCH == AVX
+#if defined(__AVX2__)
 	#include "x86_64/avx.h"
+#elif defined(__SSE4_1__)
+	#include "x86_64/sse.h"
 #else
  	#error "unsupported architecture. check definition of the 'ARCH' constant."
 #endif
