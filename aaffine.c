@@ -452,7 +452,7 @@ diag_affine_dynamic_banded_matsize(
 	sea_int_t bandwidth)
 {
 	/** barriar (1) + matrix (alen+blen+bw) + max vectors (2) */
-	return(3 * (1 +	alen + blen + bandwidth + 2) * BYTES_PER_LINE);
+	return(3 * (1 +	alen + blen + bandwidth + 4) * BYTES_PER_LINE);
 }
 
 #if 0

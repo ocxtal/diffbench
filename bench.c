@@ -94,6 +94,21 @@ char *add_tail(
 }
 
 static inline
+char *add_margin(
+	uint8_t *seq,
+	int64_t len,
+	int16_t head_margin,
+	int16_t tail_margin)
+{
+	char *p = malloc(len + head_margin + tail_margin + 1);
+	memset(p, 0, head_margin);
+	memcpy(p + head_margin, seq, len);
+	memset(p + head_margin + len, 0, tail_margin + 1);
+	free(seq);
+	return(p);
+}
+
+static inline
 uint8_t encode_base(
 	char c)
 {
@@ -169,7 +184,10 @@ struct bench_pair_s bench_adaptive_editdist(
 	char const *b,
 	int64_t blen)
 {
-	void *ptr = malloc(2 * 4 * sizeof(uint64_t) * (alen + blen + 65));
+	void *base = malloc(2 * 4 * sizeof(uint64_t) * (alen + blen + 65));
+	memset(base, 0, 4 * sizeof(uint64_t));
+	void *ptr = base + 4 * sizeof(uint64_t);
+
 	char *buf = (char *)malloc(alen + blen);
 
 
@@ -188,7 +206,7 @@ struct bench_pair_s bench_adaptive_editdist(
 		int64_t len = aed_trace(buf, alen + blen, ptr, f);
 		bench_end(trace);
 	}
-	free(ptr);
+	free(base);
 	free(buf);
 
 	return((struct bench_pair_s){
@@ -217,7 +235,9 @@ struct bench_pair_s bench_ddiag_linear(
 
 
 	int64_t alnsize = diag_linear_dynamic_banded_matsize(alen, blen, 32);
-	void *mat = malloc(alnsize);
+	void *base = malloc(alnsize);
+	memset(base, 0, 32 * 2 * sizeof(int16_t));
+	char *mat = (char *)base + 32 * 2 * sizeof(int16_t);
 
 
 	bench_t fill, trace;
@@ -233,26 +253,18 @@ struct bench_pair_s bench_ddiag_linear(
 
 
 		bench_start(fill);
-		struct mpos o = diag_linear_dynamic_banded_fill(
-			aln, param,
-			(char *)mat + 32 * sizeof(int16_t));
-		o = diag_linear_dynamic_banded_search(
-			aln, param,
-			(char *)mat + 32 * sizeof(int16_t),
-			o);
+		struct mpos o = diag_linear_dynamic_banded_fill(aln, param, mat);
+		o = diag_linear_dynamic_banded_search(aln, param, mat, o);
 		score += aln->score;
 		bench_end(fill);
 
 
 		bench_start(trace);
-		diag_linear_dynamic_banded_trace(
-			aln, param,
-			(char *)mat + 32 * sizeof(int16_t),
-			o);
+		diag_linear_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
 	}
 	free(aln);
-	free(mat);
+	free(base);
 
 	return((struct bench_pair_s){
 		.fill = fill,
@@ -280,7 +292,9 @@ struct bench_pair_s bench_ddiag_affine(
 
 
 	int64_t alnsize = diag_affine_dynamic_banded_matsize(alen, blen, 32);
-	void *mat = malloc(alnsize);
+	void *base = malloc(alnsize);
+	memset(base, 0, 32 * 6 * sizeof(int16_t));
+	char *mat = (char *)base + 32 * 6 * sizeof(int16_t);
 
 
 	bench_t fill, trace;
@@ -296,26 +310,18 @@ struct bench_pair_s bench_ddiag_affine(
 
 
 		bench_start(fill);
-		struct mpos o = diag_affine_dynamic_banded_fill(
-			aln, param,
-			(char *)mat + 32 * 3 * sizeof(int16_t));
-		o = diag_affine_dynamic_banded_search(
-			aln, param,
-			(char *)mat + 32 * 3 * sizeof(int16_t),
-			o);
+		struct mpos o = diag_affine_dynamic_banded_fill(aln, param, mat);
+		o = diag_affine_dynamic_banded_search(aln, param, mat, o);
 		score += aln->score;
 		bench_end(fill);
 
 
 		bench_start(trace);
-		diag_affine_dynamic_banded_trace(
-			aln, param,
-			(char *)mat + 32 * 3 * sizeof(int16_t),
-			o);
+		diag_affine_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
 	}
 	free(aln);
-	free(mat);
+	free(base);
 
 	return((struct bench_pair_s){
 		.fill = fill,
@@ -470,12 +476,14 @@ int main(int argc, char *argv[])
 	encode(a, alen);
 	encode(b, blen);
 
+	a = add_margin(a, alen, 16, 16);
+	b = add_margin(b, blen, 16, 16);
 
-	print_result(bench_adaptive_editdist(p, a, alen, b, blen));
-	print_result(bench_ddiag_linear(p, a, alen, b, blen));
-	print_result(bench_ddiag_affine(p, a, alen, b, blen));
-	print_result(bench_gaba_linear(p, a, alen, b, blen));
-	print_result(bench_gaba_affine(p, a, alen, b, blen));
+	print_result(bench_adaptive_editdist(p, a + 16, alen, b + 16, blen));
+	print_result(bench_ddiag_linear(p, a + 16, alen, b + 16, blen));
+	print_result(bench_ddiag_affine(p, a + 16, alen, b + 16, blen));
+	print_result(bench_gaba_linear(p, a + 16, alen, b + 16, blen));
+	print_result(bench_gaba_affine(p, a + 16, alen, b + 16, blen));
 
 
 	free(a);

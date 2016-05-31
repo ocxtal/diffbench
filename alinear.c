@@ -352,10 +352,9 @@ diag_linear_dynamic_banded_trace(
 	}
 
 	score = SCORE(tmat);
-	dir = 0; DET_DIR(dir, pl, pu);
+	dir = 0;
 	while(mi > 0 || mj > 0) {
 		DET_DIR(dir, pl, pu);
-		diag = SCORE(tmat + DTOPLEFT(dir));
 		if(score == ((v = SCORE(tmat + DTOP(dir))) + g)) {
 			tmat += DTOP(dir); score = v;
 			mj--;
@@ -365,11 +364,12 @@ diag_linear_dynamic_banded_trace(
 			mi--;
 			PUSH(p, type, len, 'D');
 		} else {
-			tmat += DTOPLEFT(dir); DET_DIR(dir, pl, pu);
+			tmat += DLEFT(dir); DET_DIR(dir, pl, pu);
+			tmat += DTOP(dir);
 			mi--;
 			mj--;
 			PUSH(p, type, len, 'M');
-			score = diag;
+			score = SCORE(tmat);
 		}
 	}
 
@@ -404,7 +404,7 @@ diag_linear_dynamic_banded_matsize(
 	sea_int_t bandwidth)
 {
 	/** barriar (1) + matrix (alen+blen+bw) + max vectors (2) */
-	return((1 + alen + blen + bandwidth + 2) * BYTES_PER_LINE);
+	return((1 + alen + blen + bandwidth + 4) * BYTES_PER_LINE);
 }
 
 #if 0
