@@ -6,6 +6,7 @@ def options(opt):
 	opt.load('compiler_c')
 
 def configure(conf):
+	conf.options.bit = 2
 	conf.recurse('gaba')
 
 	conf.load('ar')
