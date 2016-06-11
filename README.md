@@ -12,7 +12,7 @@ The semi-global variant of the Gotoh's algorithm is shown below. It calculates a
 
 The four difference variables, shown below, are introduced to represent difference of horizontally and vertically adjacent scores.
 
-<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffvals.png" width="300">
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffvals.png" width="250">
 
 The original recurrence is transformed into a difference form.
 
