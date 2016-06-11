@@ -8,29 +8,29 @@ This repository contains benchmarking programs for the difference-recurrence DP 
 
 The semi-global variant of the Gotoh's algorithm is shown below. It calculates an alignment path with its left end fixed (aligned) and right end free.
 
-![swg](https://github.com/ocxtal/diffbench/blob/master/fig/swg.png)
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/swg.png" width="500">
 
 The four difference variables, shown below, are introduced to represent difference of horizontally and vertically adjacent scores.
 
-![vals](https://github.com/ocxtal/diffbench/blob/master/fig/diffvals.png)
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffvals.png" width="300">
 
 The original recurrence is transformed into a difference form.
 
-![rec](https://github.com/ocxtal/diffbench/blob/master/fig/diffrec.png)
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffrec.png" width="400">
 
 The four difference variables are bounded by constants which are determined by the scoring parameters.
 
-![bound](https://github.com/ocxtal/diffbench/blob/master/fig/diffbound.png)
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffbound.png" width="350">
 
 Adding gap-penalty offsets and modifying E and F differences make the formula simple, enabling faster calculation on super-scaler processors.
 
-![vals2](https://github.com/ocxtal/diffbench/blob/master/fig/diffvals2.png)
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffvals2.png" width="350">
 
-![rec](https://github.com/ocxtal/diffbench/blob/master/fig/diffrec2.png)
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffrec2.png" width="400">
 
 The bounding constants are also modified.
 
-![bound2](https://github.com/ocxtal/diffbench/blob/master/fig/diffbound2.png)
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffbound2.png" width="350">
 
 This transformation is inspired by the [Loving's bit-parallel global alignment algorithm](http://bioinformatics.oxfordjournals.org/content/30/22/3166.short). In contrast to the Loving's algorithm that keeps difference values in multiple bit vectors, ours keeps difference variables in contiguous cells in a set of SIMD registers. The GABA library implements the last recurrence relation and its linear-gap penalty variant combined with the [adaptive banded heuristic](https://github.com/ocxtal/adaptivebandbench).
 
