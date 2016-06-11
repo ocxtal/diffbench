@@ -16,7 +16,7 @@ The four difference variables, shown below, are introduced to represent differen
 
 The original recurrence is transformed into a difference form.
 
-<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffrec.png" width="400">
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffrec.png" width="450">
 
 The four difference variables are bounded by constants which are determined by the scoring parameters.
 
@@ -26,7 +26,7 @@ Adding gap-penalty offsets and modifying E and F differences make the formula si
 
 <img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffvals2.png" width="350">
 
-<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffrec2.png" width="400">
+<img src="https://github.com/ocxtal/diffbench/blob/master/fig/diffrec2.png" width="450">
 
 The bounding constants are also modified.
 
