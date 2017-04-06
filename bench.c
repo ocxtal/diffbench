@@ -235,7 +235,7 @@ struct bench_pair_s bench_ddiag_linear(
 	char const *b,
 	int64_t blen)
 {
-	struct sea_params param = { 0, 2, -3, -5, -1, 0, 0, 100, 32 };
+	struct sea_params param = { 0, 1, -2, -1, 0, 0, 0, 50, 32 };
 
 
 	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
@@ -292,7 +292,7 @@ struct bench_pair_s bench_ddiag_affine(
 	char const *b,
 	int64_t blen)
 {
-	struct sea_params param = { 0, 2, -3, -5, -1, 0, 0, 100, 32 };
+	struct sea_params param = { 0, 1, -2, -2, -1, 0, 0, 50, 32 };
 
 
 	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
@@ -353,8 +353,8 @@ struct bench_pair_s bench_gaba_linear(
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
-		.xdrop = 100,
-		GABA_SCORE_SIMPLE(2, 3, 0, 5)));
+		.xdrop = 50,
+		GABA_SCORE_SIMPLE(1, 2, 0, 1)));
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
 
@@ -402,8 +402,8 @@ struct bench_pair_s bench_gaba_affine(
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
-		.xdrop = 100,
-		GABA_SCORE_SIMPLE(2, 3, 4, 1)));
+		.xdrop = 50,
+		GABA_SCORE_SIMPLE(1, 2, 1, 1)));
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
 
