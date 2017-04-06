@@ -127,7 +127,7 @@ uint8_t encode_base(
 	#define _b(x)	( (x) & 0x1f )
 
 	/* conversion tables */
-	enum bases { A = 0x00, C = 0x01, G = 0x02, T = 0x03 };
+	enum bases { A = 0x01, C = 0x02, G = 0x04, T = 0x08 };
 	uint8_t const table[] = {
 		[_b('A')] = A,
 		[_b('C')] = C,
