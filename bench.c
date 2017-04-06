@@ -26,6 +26,17 @@ void print_usage(void)
 }
 
 static inline
+void *aligned_malloc(
+	size_t size)
+{
+	void *ptr = NULL;
+	if(posix_memalign(&ptr, 32, size) != 0) {
+		return(NULL);
+	}
+	return(ptr);
+}
+
+static inline
 char random_base(void)
 {
 	char const table[4] = {'A', 'C', 'G', 'T'};
@@ -184,11 +195,11 @@ struct bench_pair_s bench_adaptive_editdist(
 	char const *b,
 	int64_t blen)
 {
-	void *base = malloc(2 * 4 * sizeof(uint64_t) * (alen + blen + 65));
+	void *base = aligned_malloc(2 * 4 * sizeof(uint64_t) * (alen + blen + 65));
 	memset(base, 0, 4 * sizeof(uint64_t));
 	void *ptr = base + 4 * sizeof(uint64_t);
 
-	char *buf = (char *)malloc(alen + blen);
+	char *buf = (char *)aligned_malloc(alen + blen);
 
 
 	bench_t fill, trace;
@@ -227,7 +238,7 @@ struct bench_pair_s bench_ddiag_linear(
 	struct sea_params param = { 0, 2, -3, -5, -1, 0, 0, 100, 32 };
 
 
-	struct sea_result *aln = (struct sea_result *)malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
+	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
 	aln->aln = (void *)((struct sea_result *)aln + 1);
 	((char *)(aln->aln))[0] = 0;
 	aln->score = 0;
@@ -235,7 +246,7 @@ struct bench_pair_s bench_ddiag_linear(
 
 
 	int64_t alnsize = diag_linear_dynamic_banded_matsize(alen, blen, 32);
-	void *base = malloc(alnsize);
+	void *base = aligned_malloc(alnsize);
 	memset(base, 0, 32 * 2 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 2 * sizeof(int16_t);
 
@@ -284,7 +295,7 @@ struct bench_pair_s bench_ddiag_affine(
 	struct sea_params param = { 0, 2, -3, -5, -1, 0, 0, 100, 32 };
 
 
-	struct sea_result *aln = (struct sea_result *)malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
+	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
 	aln->aln = (void *)((struct sea_result *)aln + 1);
 	((char *)(aln->aln))[0] = 0;
 	aln->score = 0;
@@ -292,7 +303,7 @@ struct bench_pair_s bench_ddiag_affine(
 
 
 	int64_t alnsize = diag_affine_dynamic_banded_matsize(alen, blen, 32);
-	void *base = malloc(alnsize);
+	void *base = aligned_malloc(alnsize);
 	memset(base, 0, 32 * 6 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 6 * sizeof(int16_t);
 
@@ -343,7 +354,7 @@ struct bench_pair_s bench_gaba_linear(
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
 		.xdrop = 100,
-		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 0, 5)));
+		GABA_SCORE_SIMPLE(2, 3, 0, 5)));
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
 
@@ -364,8 +375,8 @@ struct bench_pair_s bench_gaba_linear(
 		bench_end(fill);
 		
 		bench_start(trace);
-		struct gaba_result_s *r = gaba_dp_trace(dp, f, NULL, NULL);
-		gaba_dp_dump_cigar(c, p.len, r->path->array, r->path->offset, r->path->len);
+		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL, NULL);
+		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
 		bench_end(trace);
 		gaba_dp_clean(dp);
 	}
@@ -392,7 +403,7 @@ struct bench_pair_s bench_gaba_affine(
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
 		.xdrop = 100,
-		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 4, 1)));
+		GABA_SCORE_SIMPLE(2, 3, 4, 1)));
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
 
@@ -413,8 +424,8 @@ struct bench_pair_s bench_gaba_affine(
 		bench_end(fill);
 		
 		bench_start(trace);
-		struct gaba_result_s *r = gaba_dp_trace(dp, f, NULL, NULL);
-		gaba_dp_dump_cigar(c, p.len, r->path->array, r->path->offset, r->path->len);
+		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL, NULL);
+		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
 		bench_end(trace);
 		gaba_dp_clean(dp);
 	}
