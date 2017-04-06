@@ -364,10 +364,10 @@ struct bench_pair_s bench_gaba_linear(
 
 	void const *lim = (void const *)0x800000000000;
 
+	gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
-		// gaba_dp_flush(dp, lim, lim);
-		gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
+		gaba_dp_flush(dp, lim, lim);
 
 		bench_start(fill);
 		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0);
@@ -378,8 +378,8 @@ struct bench_pair_s bench_gaba_linear(
 		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL, NULL);
 		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
 		bench_end(trace);
-		gaba_dp_clean(dp);
 	}
+	gaba_dp_clean(dp);
 	gaba_clean(ctx);
 	free(c);
 
@@ -413,10 +413,10 @@ struct bench_pair_s bench_gaba_affine(
 
 	void const *lim = (void const *)0x800000000000;
 
+	gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
-		// gaba_dp_flush(dp, lim, lim);
-		gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
+		gaba_dp_flush(dp, lim, lim);
 
 		bench_start(fill);
 		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0);
@@ -427,8 +427,8 @@ struct bench_pair_s bench_gaba_affine(
 		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL, NULL);
 		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
 		bench_end(trace);
-		gaba_dp_clean(dp);
 	}
+	gaba_dp_clean(dp);
 	gaba_clean(ctx);
 	free(c);
 
