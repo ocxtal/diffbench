@@ -11,6 +11,7 @@
 #include "bench.h"
 #include "aed.h"
 #include "gaba/gaba.h"
+#include "edlib.h"
 
 #define BIT_WIDTH 			8
 #define BAND_WIDTH 			32
@@ -439,6 +440,37 @@ struct bench_pair_s bench_gaba_affine(
 	});
 }
 
+static inline
+struct bench_pair_s bench_edlib(
+	struct params p,
+	char const *a,
+	int64_t alen,
+	char const *b,
+	int64_t blen)
+{
+	/** init context */
+	EdlibAlignConfig c = (EdlibAlignConfig){ .k = -1, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
+
+	bench_t fill, trace;
+	bench_init(fill);
+	bench_init(trace);
+
+	int64_t score = 0;
+	for(int64_t i = 0; i < p.cnt; i++) {
+		bench_start(fill);
+		EdlibAlignResult r = edlibAlign(a, alen, b, blen, c);
+		score += r.editDistance;
+		bench_end(fill);
+		
+		edlibFreeAlignResult(r);
+	}
+
+	return((struct bench_pair_s){
+		.fill = fill,
+		.trace = trace,
+		.score = score
+	});
+}
 
 
 static inline
@@ -495,6 +527,7 @@ int main(int argc, char *argv[])
 	print_result(bench_ddiag_affine(p, a + 16, alen, b + 16, blen));
 	print_result(bench_gaba_linear(p, a + 16, alen, b + 16, blen));
 	print_result(bench_gaba_affine(p, a + 16, alen, b + 16, blen));
+	print_result(bench_edlib(p, a + 16, alen, b + 16, blen));
 
 
 	free(a);
