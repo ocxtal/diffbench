@@ -531,16 +531,16 @@ int main(int argc, char *argv[])
 	b = add_margin((uint8_t *)b, blen, 32, 32);
 
 	print_result(bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
-	// print_result(bench_edlib(p, a + 32, alen, b + 32, blen));
-	// print_result(bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
-	print_result(bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
+	if(p.len < 35000) {
+		// print_result(bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
+		print_result(bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
+	}
 	// print_result(bench_gaba_linear(p, a + 32, alen, b + 32, blen));
 	print_result(bench_gaba_affine(p, a + 32, alen, b + 32, blen));
-
+	// print_result(bench_edlib(p, a + 32, alen, b + 32, blen));
 
 	free(a);
 	free(b);
-
 	return 0;
 }
 
