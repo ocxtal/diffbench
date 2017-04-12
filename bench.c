@@ -449,7 +449,8 @@ struct bench_pair_s bench_edlib(
 	int64_t blen)
 {
 	/** init context */
-	EdlibAlignConfig c = (EdlibAlignConfig){ .k = -1, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
+	EdlibAlignConfig cf = (EdlibAlignConfig){ .k = -1, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
+	EdlibAlignConfig ct = (EdlibAlignConfig){ .k = -1, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_PATH };
 
 	bench_t fill, trace;
 	bench_init(fill);
@@ -458,11 +459,18 @@ struct bench_pair_s bench_edlib(
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		bench_start(fill);
-		EdlibAlignResult r = edlibAlign(a, alen, b, blen, c);
-		score += r.editDistance;
+		EdlibAlignResult f = edlibAlign(a, alen, b, blen, cf);
+		score += f.editDistance;
 		bench_end(fill);
+
+		edlibFreeAlignResult(f);
+
+		bench_start(trace);
+		EdlibAlignResult t = edlibAlign(a, alen, b, blen, ct);
+		score += t.editDistance;
+		bench_end(trace);
 		
-		edlibFreeAlignResult(r);
+		edlibFreeAlignResult(t);
 	}
 
 	return((struct bench_pair_s){
@@ -523,7 +531,7 @@ int main(int argc, char *argv[])
 	b = add_margin((uint8_t *)b, blen, 32, 32);
 
 	print_result(bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
-	print_result(bench_edlib(p, a + 32, alen, b + 32, blen));
+	// print_result(bench_edlib(p, a + 32, alen, b + 32, blen));
 	// print_result(bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
 	print_result(bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
 	// print_result(bench_gaba_linear(p, a + 32, alen, b + 32, blen));
