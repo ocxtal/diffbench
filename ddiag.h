@@ -7,6 +7,9 @@
 #include <limits.h>
 #include "sea.h"
 
+#ifndef _SIMD_H_INCLUDED
+#define _SIMD_H_INCLUDED
+
 /**
  * Constants representing algorithms
  *
@@ -17,6 +20,16 @@
 #define XSEA 							( 3 )
 #define NW 								( 6 )
 
+/**
+ * max and min
+ */
+#define MAX2(x,y) 		( (x) > (y) ? (x) : (y) )
+#define MAX3(x,y,z) 	( MAX2(x, MAX2(y, z)) )
+#define MAX4(w,x,y,z) 	( MAX2(MAX2(w, x), MAX2(y, z)) )
+
+#define MIN2(x,y) 		( (x) < (y) ? (x) : (y) )
+#define MIN3(x,y,z) 	( MIN2(x, MIN2(y, z)) )
+#define MIN4(w,x,y,z) 	( MIN2(MIN2(w, x), MIN2(y, z)) )
 
 /**
  * architecture flag definitions
@@ -174,7 +187,7 @@ struct mpos {
  	#error "unsupported architecture. check definition of the 'ARCH' constant."
 #endif
 
-
+#endif /* _SIMD_H_INCLUDED */
 
 struct mpos
 diag_linear_dynamic_banded_fill(

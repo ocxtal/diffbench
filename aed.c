@@ -144,8 +144,8 @@ struct aed_fill_s aed_fill(
 	uint8_t const *abase = a;
 	uint8_t const *bbase = b;
 
-	uint8_t const atail[BW] = { 0 };
-	uint8_t const btail[BW] = {
+	static uint8_t const atail[BW] = { 0 };
+	static uint8_t const btail[BW] = {
 		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -270,7 +270,11 @@ struct aed_fill_s aed_fill(
 
 			}
 
-			blk->vec[i] = (struct aed_vec_s){ ph, mh, pv, mv };
+			// blk->vec[i] = (struct aed_vec_s){ ph, mh, pv, mv };
+			blk->vec[i].ph = ph;
+			blk->vec[i].mh = mh;
+			blk->vec[i].pv = pv;
+			blk->vec[i].mv = mv;
 		}
 
 		debug("save dir(%llx), blk(%p)", dir, blk);

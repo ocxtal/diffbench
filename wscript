@@ -23,7 +23,7 @@ def configure(conf):
 	conf.env.append_value('CXXFLAGS', '-march=native')
 
 	conf.env.append_value('LIB_DIFFBENCH', conf.env.LIB_GABA)
-	conf.env.append_value('OBJ_DIFFBENCH', ['aed.o', 'alinear.o', 'aaffine.o', 'edlib.o', 'bench.o'] + conf.env.OBJ_GABA)
+	conf.env.append_value('OBJ_DIFFBENCH', ['aed.o', 'alinear.o', 'aaffine.o', 'rlinear.o', 'raffine.o', 'edlib.o', 'bench.o'] + conf.env.OBJ_GABA)
 
 def build(bld):
 	bld.recurse('gaba')
@@ -31,6 +31,8 @@ def build(bld):
 	bld.objects(source = 'aed.c', target = 'aed.o')
 	bld.objects(source = 'alinear.c', target = 'alinear.o')
 	bld.objects(source = 'aaffine.c', target = 'aaffine.o')
+	bld.objects(source = 'rlinear.c', target = 'rlinear.o')
+	bld.objects(source = 'raffine.c', target = 'raffine.o')
 	bld.objects(source = 'edlib.cpp', target = 'edlib.o')
 	bld.objects(source = 'bench.c', target = 'bench.o', defines = ['BENCH'])
 

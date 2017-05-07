@@ -17,6 +17,7 @@
 #define BAND_WIDTH 			32
 
 #include "ddiag.h"
+#include "diff.h"
 
 /**
  * @fn print_usage
@@ -159,6 +160,7 @@ struct params {
 	double d;
 	char **pa;
 	char **pb;
+	int table;
 };
 
 int parse_args(struct params *p, int c, char *arg)
@@ -175,6 +177,7 @@ int parse_args(struct params *p, int c, char *arg)
 		 */
 		case 'c': p->cnt = atoi((char *)arg); return 0;
 		case 'a': printf("%s\n", arg); return 0;
+		case 't': p->table = 1; return 0;
 		/**
 		 * the others: print help message
 		 */
@@ -343,6 +346,120 @@ struct bench_pair_s bench_ddiag_affine(
 }
 
 static inline
+struct bench_pair_s bench_diff_linear(
+	struct params p,
+	char const *a,
+	int64_t alen,
+	char const *b,
+	int64_t blen)
+{
+	struct sea_params param = { 0, 1, -2, -1, 0, 0, 0, 50, 32 };
+
+
+	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result) + 1000000);
+	aln->aln = (void *)((struct sea_result *)aln + 1);
+	((char *)(aln->aln))[0] = 0;
+	aln->score = 0;
+	aln->ctx = NULL;
+
+
+	int64_t alnsize = diff_linear_dynamic_banded_matsize(alen, blen, 32);
+	void *base = aligned_malloc(alnsize);
+	memset(base, 0, 32 * 2 * sizeof(int16_t));
+	char *mat = (char *)base + 32 * 2 * sizeof(int16_t);
+
+
+	bench_t fill, trace;
+	bench_init(fill);
+	bench_init(trace);
+
+	int64_t score = 0;
+	for(int64_t i = 0; i < p.cnt; i++) {
+		aln->score = 0;
+		aln->a = a; aln->apos = 0; aln->alen = alen;
+		aln->b = b; aln->bpos = 0; aln->blen = blen;
+		aln->len = alnsize;
+
+
+		bench_start(fill);
+		struct mpos o = diff_linear_dynamic_banded_fill(aln, param, mat);
+		o = diff_linear_dynamic_banded_search(aln, param, mat, o);
+		score += aln->score;
+		bench_end(fill);
+
+
+		bench_start(trace);
+		diff_linear_dynamic_banded_trace(aln, param, mat, o);
+		bench_end(trace);
+	}
+	free(aln);
+	free(base);
+
+	return((struct bench_pair_s){
+		.fill = fill,
+		.trace = trace,
+		.score = score
+	});
+}
+
+static inline
+struct bench_pair_s bench_diff_affine(
+	struct params p,
+	char const *a,
+	int64_t alen,
+	char const *b,
+	int64_t blen)
+{
+	struct sea_params param = { 0, 1, -2, -2, -1, 0, 0, 50, 32 };
+
+
+	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
+	aln->aln = (void *)((struct sea_result *)aln + 1);
+	((char *)(aln->aln))[0] = 0;
+	aln->score = 0;
+	aln->ctx = NULL;
+
+
+	int64_t alnsize = diff_affine_dynamic_banded_matsize(alen, blen, 32);
+	void *base = aligned_malloc(alnsize);
+	memset(base, 0, 32 * 6 * sizeof(int16_t));
+	char *mat = (char *)base + 32 * 6 * sizeof(int16_t);
+
+
+	bench_t fill, trace;
+	bench_init(fill);
+	bench_init(trace);
+
+	int64_t score = 0;
+	for(int64_t i = 0; i < p.cnt; i++) {
+		aln->score = 0;
+		aln->a = a; aln->apos = 0; aln->alen = alen;
+		aln->b = b; aln->bpos = 0; aln->blen = blen;
+		aln->len = alnsize;
+
+
+		bench_start(fill);
+		struct mpos o = diff_affine_dynamic_banded_fill(aln, param, mat);
+		o = diff_affine_dynamic_banded_search(aln, param, mat, o);
+		score += aln->score;
+		bench_end(fill);
+
+
+		bench_start(trace);
+		diff_affine_dynamic_banded_trace(aln, param, mat, o);
+		bench_end(trace);
+	}
+	free(aln);
+	free(base);
+
+	return((struct bench_pair_s){
+		.fill = fill,
+		.trace = trace,
+		.score = score
+	});
+}
+
+static inline
 struct bench_pair_s bench_gaba_linear(
 	struct params p,
 	char const *a,
@@ -483,13 +600,22 @@ struct bench_pair_s bench_edlib(
 
 static inline
 void print_result(
+	int table,
 	struct bench_pair_s p)
 {
-	printf("%lld\t%lld\t%lld\t%lld\n",
-		bench_get(p.fill),
-		bench_get(p.trace),
-		bench_get(p.fill) + bench_get(p.trace),
-		p.score);
+	if(table == 0) {
+		printf("%lld\t%lld\t%lld\t%lld\n",
+			bench_get(p.fill),
+			bench_get(p.trace),
+			bench_get(p.fill) + bench_get(p.trace),
+			p.score);
+	} else {
+		printf("%lld\t%lld\t%lld\t%lld\t",
+			bench_get(p.fill),
+			bench_get(p.trace),
+			bench_get(p.fill) + bench_get(p.trace),
+			p.score);
+	}
 	return;
 }
 
@@ -508,11 +634,15 @@ int main(int argc, char *argv[])
 
 	/** parse args */
 	int i;
-	while((i = getopt(argc, argv, "q:t:o:l:x:d:c:a:seb:h")) != -1) {
+	while((i = getopt(argc, argv, "l:x:d:c:a:th")) != -1) {
 		if(parse_args(&p, i, optarg) != 0) { exit(1); }
 	}
 
-	fprintf(stderr, "len\t%lld\ncnt\t%lld\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
+	if(p.table == 0) {
+		printf("len\t%lld\ncnt\t%lld\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
+	} else {
+		printf("%lld\t", p.len);
+	}
 
 
 	char *a = generate_random_sequence(p.len);
@@ -530,14 +660,20 @@ int main(int argc, char *argv[])
 	a = add_margin((uint8_t *)a, alen, 32, 32);
 	b = add_margin((uint8_t *)b, blen, 32, 32);
 
-	print_result(bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
+	// print_result(p.table, bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
 	if(p.len < 35000) {
-		// print_result(bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
-		print_result(bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
+		// print_result(p.table, bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
+		// print_result(p.table, bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
 	}
-	// print_result(bench_gaba_linear(p, a + 32, alen, b + 32, blen));
-	print_result(bench_gaba_affine(p, a + 32, alen, b + 32, blen));
+	// print_result(p.table, bench_diff_linear(p, a + 32, alen, b + 32, blen));
+	// print_result(p.table, bench_diff_affine(p, a + 32, alen, b + 32, blen));
+	print_result(p.table, bench_gaba_linear(p, a + 32, alen, b + 32, blen));
+	// print_result(p.table, bench_gaba_affine(p, a + 32, alen, b + 32, blen));
 	// print_result(bench_edlib(p, a + 32, alen, b + 32, blen));
+
+	if(p.table != 0) {
+		printf("\n");
+	}
 
 	free(a);
 	free(b);
