@@ -324,6 +324,7 @@ diag_linear_dynamic_banded_trace(
 		 *pu = (char *)mat + ADDR(mp-1, -bw/2),
 		 *pl = (char *)mat + ADDR(mp-1, bw/2-1);
 	sea_int_t score, v, h, dir;
+	sea_int_t icnt = 0, ibases = 0, dcnt = 0, dbases = 0;
 
 	char *p = aln->aln + aln->len - 1;
 	char type = '\0';
@@ -355,12 +356,22 @@ diag_linear_dynamic_banded_trace(
 		DET_DIR(dir, pl, pu);
 		if(score == ((v = SCORE(tmat + DTOP(dir))) + g)) {
 			tmat += DTOP(dir); score = v;
-			mj--;
+			mj--; icnt++; ibases++;
 			PUSH(p, type, len, 'I');
+			while(mj > 0 && score == ((v = SCORE(tmat + DTOP(dir))) + g)) {
+				tmat += DTOP(dir); score = v;
+				mj--; ibases++;
+				PUSH(p, type, len, 'I');
+			}
 		} else if(score == ((h = SCORE(tmat + DLEFT(dir))) + g)) {
 			tmat += DLEFT(dir); score = h;
-			mi--;
+			mi--; dcnt++; dbases++;
 			PUSH(p, type, len, 'D');
+			while(mi > 0 && score == ((h = SCORE(tmat + DLEFT(dir))) + g)) {
+				tmat += DLEFT(dir); score = h;
+				mi--; dbases++;
+				PUSH(p, type, len, 'D');
+			}
 		} else {
 			tmat += DLEFT(dir); DET_DIR(dir, pl, pu);
 			tmat += DTOP(dir);
@@ -370,6 +381,10 @@ diag_linear_dynamic_banded_trace(
 			score = SCORE(tmat);
 		}
 	}
+	aln->icnt = icnt;
+	aln->ibases = ibases;
+	aln->dcnt = dcnt;
+	aln->dbases = dbases;
 
 	char *b = aln->aln;
 	int64_t l = 0;

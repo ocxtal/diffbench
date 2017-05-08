@@ -662,12 +662,12 @@ int main(int argc, char *argv[])
 
 	print_result(p.table, bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
 	if(p.len < 35000) {
-		// print_result(p.table, bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
+		print_result(p.table, bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
 		print_result(p.table, bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
 	}
-	// print_result(p.table, bench_diff_linear(p, a + 32, alen, b + 32, blen));
+	print_result(p.table, bench_diff_linear(p, a + 32, alen, b + 32, blen));
 	print_result(p.table, bench_diff_affine(p, a + 32, alen, b + 32, blen));
-	// print_result(p.table, bench_gaba_linear(p, a + 32, alen, b + 32, blen));
+	print_result(p.table, bench_gaba_linear(p, a + 32, alen, b + 32, blen));
 	print_result(p.table, bench_gaba_affine(p, a + 32, alen, b + 32, blen));
 	// print_result(bench_edlib(p, a + 32, alen, b + 32, blen));
 

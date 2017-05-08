@@ -359,6 +359,7 @@ diag_affine_dynamic_banded_trace(
 		 *pu = (char *)mat + AADDR(mp-1, -bw/2),
 		 *pl = (char *)mat + AADDR(mp-1, bw/2-1);
 	sea_int_t score, dir;
+	sea_int_t icnt = 0, ibases = 0, dcnt = 0, dbases = 0;
 
 	char *p = aln->aln + aln->len - 1;
 	char type = '\0';
@@ -391,21 +392,21 @@ diag_affine_dynamic_banded_trace(
 		if(score == ASCOREF(tmat)) {
 			while(ASCOREV(tmat) == ASCOREV(tmat + DATOP(dir)) + ge) {
 				tmat += DATOP(dir); DET_DIR(dir, pl, pu);
-				mj--;
+				mj--; ibases++;
 				PUSH(p, type, len, 'I');
 			}
 			tmat += DATOP(dir);
-			mj--;
+			mj--; icnt++; ibases++;
 			PUSH(p, type, len, 'I');
 			score = ASCOREV(tmat);
 		} else if(score == ASCOREE(tmat)) {
 			while(ASCOREV(tmat) == ASCOREV(tmat + DALEFT(dir)) + ge) {
 				tmat += DALEFT(dir); DET_DIR(dir, pl, pu);
-				mi--;
+				mi--; dbases++;
 				PUSH(p, type, len, 'D');
 			}
 			tmat += DALEFT(dir);
-			mi--;
+			mi--; dcnt++; dbases++;
 			PUSH(p, type, len, 'D');
 			score = ASCOREV(tmat);
 		} else {
@@ -417,6 +418,10 @@ diag_affine_dynamic_banded_trace(
 			score = ASCOREV(tmat);
 		}
 	}
+	aln->icnt = icnt;
+	aln->ibases = ibases;
+	aln->dcnt = dcnt;
+	aln->dbases = dbases;
 
 	char *b = aln->aln;
 	int64_t l = 0;
