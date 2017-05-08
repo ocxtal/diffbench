@@ -18,7 +18,7 @@
 #include "seqreader.h"
 #include "diff.h"
 
-#define ALG 				SEA
+#define ALG 				XSEA
 
 /**
  * function declarations

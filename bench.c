@@ -383,12 +383,12 @@ struct bench_pair_s bench_diff_linear(
 
 		bench_start(fill);
 		struct mpos o = diff_linear_dynamic_banded_fill(aln, param, mat);
-		o = diff_linear_dynamic_banded_search(aln, param, mat, o);
-		score += aln->score;
 		bench_end(fill);
 
 
 		bench_start(trace);
+		o = diff_linear_dynamic_banded_search(aln, param, mat, o);
+		score += aln->score;
 		diff_linear_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
 	}
@@ -440,12 +440,12 @@ struct bench_pair_s bench_diff_affine(
 
 		bench_start(fill);
 		struct mpos o = diff_affine_dynamic_banded_fill(aln, param, mat);
-		o = diff_affine_dynamic_banded_search(aln, param, mat, o);
-		score += aln->score;
 		bench_end(fill);
 
 
 		bench_start(trace);
+		o = diff_affine_dynamic_banded_search(aln, param, mat, o);
+		score += aln->score;
 		diff_affine_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
 	}
@@ -660,15 +660,15 @@ int main(int argc, char *argv[])
 	a = add_margin((uint8_t *)a, alen, 32, 32);
 	b = add_margin((uint8_t *)b, blen, 32, 32);
 
-	// print_result(p.table, bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
+	print_result(p.table, bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
 	if(p.len < 35000) {
 		// print_result(p.table, bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
-		// print_result(p.table, bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
+		print_result(p.table, bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
 	}
 	// print_result(p.table, bench_diff_linear(p, a + 32, alen, b + 32, blen));
-	// print_result(p.table, bench_diff_affine(p, a + 32, alen, b + 32, blen));
-	print_result(p.table, bench_gaba_linear(p, a + 32, alen, b + 32, blen));
-	// print_result(p.table, bench_gaba_affine(p, a + 32, alen, b + 32, blen));
+	print_result(p.table, bench_diff_affine(p, a + 32, alen, b + 32, blen));
+	// print_result(p.table, bench_gaba_linear(p, a + 32, alen, b + 32, blen));
+	print_result(p.table, bench_gaba_affine(p, a + 32, alen, b + 32, blen));
 	// print_result(bench_edlib(p, a + 32, alen, b + 32, blen));
 
 	if(p.table != 0) {

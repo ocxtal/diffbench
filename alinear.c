@@ -319,13 +319,11 @@ diag_linear_dynamic_banded_trace(
 			  mj = o.m.j,
 			  mp = o.m.p,
 			  mq = o.m.q;
-	sea_int_t m = param.m,
-			  x = param.x,
-			  g = param.gi;
+	sea_int_t g = param.gi;
 	char *tmat = (char *)mat + ADDR(mp, mq),
 		 *pu = (char *)mat + ADDR(mp-1, -bw/2),
 		 *pl = (char *)mat + ADDR(mp-1, bw/2-1);
-	sea_int_t score, cost, diag, v, h, dir;
+	sea_int_t score, v, h, dir;
 
 	char *p = aln->aln + aln->len - 1;
 	char type = '\0';

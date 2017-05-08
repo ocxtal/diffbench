@@ -181,7 +181,6 @@ struct aed_fill_s aed_fill(
 
 	/* direction vector */
 	uint64_t register dir = 0;
-	int64_t register cnt = 0;
 
 	#define _update_vectors() { \
 		uint64_t eq = ~((al ^ bl) | (ah ^ bh)); \

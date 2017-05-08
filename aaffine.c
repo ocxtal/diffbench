@@ -21,7 +21,7 @@
 #include "seqreader.h"
 #include "ddiag.h"
 
-#define ALG 				SEA
+#define ALG 				XSEA
 
 /**
  * function declarations
@@ -354,10 +354,7 @@ diag_affine_dynamic_banded_trace(
 			  mj = o.m.j,
 			  mp = o.m.p,
 			  mq = o.m.q;
-	sea_int_t m = param.m,
-			  x = param.x,
-			  gi = param.gi,
-			  ge = param.ge;
+	sea_int_t ge = param.ge;
 	char *tmat = (char *)mat + AADDR(mp, mq),
 		 *pu = (char *)mat + AADDR(mp-1, -bw/2),
 		 *pl = (char *)mat + AADDR(mp-1, bw/2-1);
