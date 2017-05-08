@@ -408,6 +408,7 @@ diff_affine_dynamic_banded_trace(
 	sea_int_t ge = param.ge,
 			  gi = param.gi;
 	sea_int_t dir;								/** 2-bit direction indicator (VV, VH, HV, or HH) */
+	sea_int_t icnt = 0, ibases = 0, dcnt = 0, dbases = 0;
 	char *tmat = (char *)mat + AADDR(mp, mq),
 		 *pdir = mat + AADDR(aln->len, -bw/2) + mp;
 
@@ -440,20 +441,20 @@ diff_affine_dynamic_banded_trace(
 		if(DV(tmat, gi) == 0) {
 			while(mj > 0 && DF(tmat, gi) == gi-ge) {
 				tmat += DATOP(dir); DET_DIR(dir, pdir);
-				mj--;
+				mj--; ibases++;
 				PUSH(p, type, len, 'I');
 			}
 			tmat += DATOP(dir);
-			mj--;
+			mj--; icnt++; ibases++;
 			PUSH(p, type, len, 'I');
 		} else if(DH(tmat, gi) == 0) {
 			while(mi > 0 && DE(tmat, gi) == gi-ge) {
 				tmat += DALEFT(dir); DET_DIR(dir, pdir);
-				mi--;
+				mi--; dbases++;
 				PUSH(p, type, len, 'D');
 			}
 			tmat += DALEFT(dir);
-			mi--;
+			mi--; dcnt++; dbases++;
 			PUSH(p, type, len, 'D');
 		} else {
 			tmat += DTOPLEFT(dir); DET_DIR(dir, pdir);
@@ -462,8 +463,18 @@ diff_affine_dynamic_banded_trace(
 			PUSH(p, type, len, 'M');
 		}
 	}
-	while(mj > 0) { mj--; PUSH(p, type, len, 'I'); }
-	while(mi > 0) { mi--; PUSH(p, type, len, 'D'); }
+	if(mj > 0) {
+		icnt++;
+		while(mj > 0) { mj--; ibases++; PUSH(p, type, len, 'I'); }
+	}
+	if(mi > 0) {
+		dcnt++;
+		while(mi > 0) { mi--; dbases++; PUSH(p, type, len, 'D'); }
+	}
+	aln->icnt = icnt;
+	aln->ibases = ibases;
+	aln->dcnt = dcnt;
+	aln->dbases = dbases;
 
 	char *b = aln->aln;
 	int64_t l = 0;

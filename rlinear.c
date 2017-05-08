@@ -381,6 +381,7 @@ diff_linear_dynamic_banded_trace(
 			  mq = o.m.q;
 	sea_int_t g = param.gi;
 	sea_int_t dir;								/** 2-bit direction indicator (VV, VH, HV, or HH) */
+	sea_int_t icnt = 0, ibases = 0, dcnt = 0, dbases = 0;
 	char *tmat = (char *)mat + ADDR(mp, mq),
 		 *pdir = mat + ADDR(aln->len, -bw/2) + mp;
 
@@ -412,12 +413,22 @@ diff_linear_dynamic_banded_trace(
 		DET_DIR(dir, pdir);
 		if(DV(tmat, g) == 0) {
 			tmat += DTOP(dir);
-			mj--;
+			mj--; icnt++; ibases++;
 			PUSH(p, type, len, 'I');
+			while(mj > 0 && DV(tmat, g) == 0) {
+				tmat += DTOP(dir);
+				mj--; ibases++;
+				PUSH(p, type, len, 'I');
+			}
 		} else if(DH(tmat, g) == 0) {
 			tmat += DLEFT(dir);
-			mi--;
+			mi--; dcnt++; dbases++;
 			PUSH(p, type, len, 'D');
+			while(mi > 0 && DH(tmat, g) == 0) {
+				tmat += DLEFT(dir);
+				mi--; dbases++;
+				PUSH(p, type, len, 'D');
+			}
 		} else {
 			tmat += DTOPLEFT(dir); DET_DIR(dir, pdir);
 			mi--;
@@ -425,8 +436,18 @@ diff_linear_dynamic_banded_trace(
 			PUSH(p, type, len, 'M');
 		}
 	}
-	while(mj > 0) { mj--; PUSH(p, type, len, 'I'); }
-	while(mi > 0) { mi--; PUSH(p, type, len, 'D'); }
+	if(mj > 0) {
+		icnt++;
+		while(mj > 0) { mj--; ibases++; PUSH(p, type, len, 'I'); }
+	}
+	if(mi > 0) {
+		dcnt++;
+		while(mi > 0) { mi--; dbases++; PUSH(p, type, len, 'D'); }
+	}
+	aln->icnt = icnt;
+	aln->ibases = ibases;
+	aln->dcnt = dcnt;
+	aln->dbases = dbases;
 
 	char *b = aln->aln;
 	int64_t l = 0;

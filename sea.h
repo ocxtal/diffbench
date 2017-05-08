@@ -215,6 +215,7 @@ struct sea_result {
 	void const *b;			/*!< a pointer to a sequence b. */
 	void *aln;				/*!< a pointer to a alignment result. */
 	sea_int_t score;		/*!< an alignment score. */
+	sea_int_t icnt, ibases, dcnt, dbases;
 	sea_int_t len;			/*!< alignment length. (the length of a content of aln) used as an errno container if error occured. */
 	sea_int_t apos;			/*!< alignment start position on a. */
 	sea_int_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
