@@ -153,6 +153,24 @@ void encode(char *ptr, int64_t len)
 	return;
 }
 
+static inline
+void alignment_to_cigar(char *cig, char const *aln, int64_t len)
+{
+	if(len <= 0) {
+		return;
+	}
+	char state = aln[0], *p = cig;
+	for(int64_t i = 1, cnt = 1; i < len; i++) {
+		if(aln[i] == state) {
+			cnt++;
+			continue;
+		}
+		p += sprintf(p, "%ld%c", cnt, state);
+		state = aln[i]; cnt = 1;
+	}
+	return;
+}
+
 struct params {
 	int64_t len;
 	int64_t cnt;
@@ -187,7 +205,7 @@ int parse_args(struct params *p, int c, char *arg)
 }
 
 struct bench_pair_s {
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	int64_t score;
 };
 
@@ -204,11 +222,13 @@ struct bench_pair_s bench_adaptive_editdist(
 	void *ptr = base + 4 * sizeof(uint64_t);
 
 	char *buf = (char *)aligned_malloc(alen + blen);
+	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
 
 
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
+	bench_init(conv);
 
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
@@ -220,13 +240,19 @@ struct bench_pair_s bench_adaptive_editdist(
 		bench_start(trace);
 		int64_t len = aed_trace(buf, alen + blen, ptr, f);
 		bench_end(trace);
+
+		bench_start(conv);
+		alignment_to_cigar(cigar, buf, len);
+		bench_end(conv);
 	}
 	free(base);
 	free(buf);
+	free(cigar);
 
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
+		.conv = conv,
 		.score = score
 	});
 }
@@ -254,10 +280,12 @@ struct bench_pair_s bench_ddiag_linear(
 	memset(base, 0, 32 * 2 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 2 * sizeof(int16_t);
 
+	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
 
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
+	bench_init(conv);
 
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
@@ -277,13 +305,20 @@ struct bench_pair_s bench_ddiag_linear(
 		bench_start(trace);
 		diag_linear_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
+
+
+		bench_start(conv);
+		alignment_to_cigar(cigar, aln->aln, aln->len);
+		bench_end(conv);
 	}
 	free(aln);
 	free(base);
+	free(cigar);
 
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
+		.conv = conv,
 		.score = score
 	});
 }
@@ -311,10 +346,12 @@ struct bench_pair_s bench_ddiag_affine(
 	memset(base, 0, 32 * 6 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 6 * sizeof(int16_t);
 
+	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
 
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
+	bench_init(conv);
 
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
@@ -334,13 +371,20 @@ struct bench_pair_s bench_ddiag_affine(
 		bench_start(trace);
 		diag_affine_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
+
+
+		bench_start(conv);
+		alignment_to_cigar(cigar, aln->aln, aln->len);
+		bench_end(conv);
 	}
 	free(aln);
 	free(base);
+	free(cigar);
 
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
+		.conv = conv,
 		.score = score
 	});
 }
@@ -368,10 +412,12 @@ struct bench_pair_s bench_diff_linear(
 	memset(base, 0, 32 * 2 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 2 * sizeof(int16_t);
 
+	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
 
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
+	bench_init(conv);
 
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
@@ -391,13 +437,20 @@ struct bench_pair_s bench_diff_linear(
 		score += aln->score;
 		diff_linear_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
+
+
+		bench_start(conv);
+		alignment_to_cigar(cigar, aln->aln, aln->len);
+		bench_end(conv);
 	}
 	free(aln);
 	free(base);
+	free(cigar);
 
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
+		.conv = conv,
 		.score = score
 	});
 }
@@ -425,10 +478,12 @@ struct bench_pair_s bench_diff_affine(
 	memset(base, 0, 32 * 6 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 6 * sizeof(int16_t);
 
+	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
 
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
+	bench_init(conv);
 
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
@@ -448,13 +503,20 @@ struct bench_pair_s bench_diff_affine(
 		score += aln->score;
 		diff_affine_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
+
+
+		bench_start(conv);
+		alignment_to_cigar(cigar, aln->aln, aln->len);
+		bench_end(conv);
 	}
 	free(aln);
 	free(base);
+	free(cigar);
 
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
+		.conv = conv,
 		.score = score
 	});
 }
@@ -476,9 +538,10 @@ struct bench_pair_s bench_gaba_linear(
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
 
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
+	bench_init(conv);
 
 	void const *lim = (void const *)0x800000000000;
 
@@ -494,8 +557,11 @@ struct bench_pair_s bench_gaba_linear(
 		
 		bench_start(trace);
 		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL, NULL);
-		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
 		bench_end(trace);
+
+		bench_start(conv);
+		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
+		bench_end(conv);
 	}
 	gaba_dp_clean(dp);
 	gaba_clean(ctx);
@@ -504,6 +570,7 @@ struct bench_pair_s bench_gaba_linear(
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
+		.conv = conv,
 		.score = score
 	});
 }
@@ -525,9 +592,10 @@ struct bench_pair_s bench_gaba_affine(
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
 
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
+	bench_init(conv);
 
 	void const *lim = (void const *)0x800000000000;
 
@@ -543,8 +611,11 @@ struct bench_pair_s bench_gaba_affine(
 		
 		bench_start(trace);
 		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL, NULL);
-		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
 		bench_end(trace);
+
+		bench_start(conv);
+		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
+		bench_end(conv);
 	}
 	gaba_dp_clean(dp);
 	gaba_clean(ctx);
@@ -553,6 +624,7 @@ struct bench_pair_s bench_gaba_affine(
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
+		.conv = conv,
 		.score = score
 	});
 }
@@ -604,16 +676,18 @@ void print_result(
 	struct bench_pair_s p)
 {
 	if(table == 0) {
-		printf("%lld\t%lld\t%lld\t%lld\n",
+		printf("%ld\t%ld\t%ld\t%ld\t%ld\n",
 			bench_get(p.fill),
 			bench_get(p.trace),
-			bench_get(p.fill) + bench_get(p.trace),
+			bench_get(p.conv),
+			bench_get(p.fill) + bench_get(p.trace) + bench_get(p.conv),
 			p.score);
 	} else {
-		printf("%lld\t%lld\t%lld\t%lld\t",
+		printf("%ld\t%ld\t%ld\t%ld\t%ld\t",
 			bench_get(p.fill),
 			bench_get(p.trace),
-			bench_get(p.fill) + bench_get(p.trace),
+			bench_get(p.conv),
+			bench_get(p.fill) + bench_get(p.trace) + bench_get(p.conv),
 			p.score);
 	}
 	return;
@@ -639,9 +713,9 @@ int main(int argc, char *argv[])
 	}
 
 	if(p.table == 0) {
-		printf("len\t%lld\ncnt\t%lld\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
+		printf("len\t%ld\ncnt\t%ld\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
 	} else {
-		printf("%lld\t", p.len);
+		printf("%ld\t", p.len);
 	}
 
 

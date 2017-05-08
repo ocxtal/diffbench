@@ -300,8 +300,6 @@ int64_t aed_trace(
 	uint64_t dir = blk->dir<<(63 - rem);
 
 	char *p = buf + size - 1;
-	char type = '\0';
-	int64_t len = 0;
 
 	#define _aed_trace_pop(_blk, _rem, _dir) { \
 		(_dir) <<= 1; \
@@ -311,50 +309,25 @@ int64_t aed_trace(
 		} \
 	}
 
-	#define _aed_trace_push(_p, _type, _len, _c) { \
-		if((_type) != (_c)) { \
-			*(_p)-- = (_type); \
-			while((_len) > 0) { \
-				int64_t _r = (_len) % 10; \
-				(_len) = (_len) / 10; \
-				*(_p)-- = _r + '0'; \
-			} \
-			(_type) = (_c); \
-			(_len) = 1; \
-		} else { \
-			(_len)++; \
-		} \
-	}
-
 	while(blk >= (struct aed_block_s *)base) {
 		int64_t pv = 0x01 & (blk->vec[rem].pv>>idx);
 		int64_t ph = 0x01 & (blk->vec[rem].ph>>idx);
 		int64_t d = (dir & 0x8000000000000000) ? 0x01 : 0;
 
-		debug("ph(%llx), mh(%llx), pv(%llx), mv(%llx)", blk->vec[rem].ph, blk->vec[rem].mh, blk->vec[rem].pv, blk->vec[rem].mv);
-		debug("blk(%p), rem(%lld), idx(%llu), dir(%llx)", blk, rem, idx, dir);
-		debug("pv(%lld), ph(%lld), d(%lld)", pv, ph, d);
-
 		if(pv == 1) {
-			debug("go up, ins, type(%c)", type);
 			idx -= (1 - d);
-			_aed_trace_push(p, type, len, 'I');
+			*p-- = 'I';
 		} else if(ph == 1) {
-			debug("go left, del, type(%c)", type);
 			idx += d;
-			_aed_trace_push(p, type, len, 'D');
+			*p-- = 'D';
 		} else {
-			debug("go diag, match, type(%c)", type);
 			_aed_trace_pop(blk, rem, dir);
 			int64_t d2 = (dir & 0x8000000000000000) ? 0x01 : 0;
 			idx += (d + d2 - 1);
-			_aed_trace_push(p, type, len, 'M');
+			*p-- = 'M';
 		}
 		_aed_trace_pop(blk, rem, dir);
 	}
-
-	_aed_trace_push(p, type, len, ' ');
-
 	debug("%s", p + 1);
 
 	char *b = buf;

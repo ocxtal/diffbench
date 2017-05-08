@@ -405,71 +405,47 @@ diff_affine_dynamic_banded_trace(
 			  mj = o.m.j,
 			  mp = o.m.p,
 			  mq = o.m.q;
-	sea_int_t ge = param.ge,
-			  gi = param.gi;
+	sea_int_t gi = param.gi;
 	sea_int_t dir;								/** 2-bit direction indicator (VV, VH, HV, or HH) */
 	sea_int_t icnt = 0, ibases = 0, dcnt = 0, dbases = 0;
 	char *tmat = (char *)mat + AADDR(mp, mq),
-		 *pdir = mat + AADDR(aln->len, -bw/2) + mp;
-
-	char *p = aln->aln + aln->len - 1;
-	char type = '\0';
-	int64_t len = 0;
-
-	#define PUSH(_p, _type, _len, _c) { \
-		if((_type) != (_c)) { \
-			*(_p)-- = (_type); \
-			while((_len) > 0) { \
-				int64_t _r = (_len) % 10; \
-				(_len) = (_len) / 10; \
-				*(_p)-- = _r + '0'; \
-			} \
-			(_type) = (_c); \
-			(_len) = 1; \
-		} else { \
-			(_len)++; \
-		} \
-	}
+		 *pdir = mat + AADDR(aln->len, -bw/2) + mp,
+		 *p = aln->aln + aln->len - 1;
 
 	#define DET_DIR(dir, pdir) { \
 		(dir) = ((dir)>>1) | ((*pdir--)<<1); \
 	}
 
 	dir = 0; DET_DIR(dir, pdir);
-	while(mi > 0 && mj > 0) {
+	while(mi > 0 || mj > 0) {
 		DET_DIR(dir, pdir);
-		if(DV(tmat, gi) == 0) {
-			while(mj > 0 && DF(tmat, gi) == gi-ge) {
-				tmat += DATOP(dir); DET_DIR(dir, pdir);
+		if(DF(tmat, gi) == DV(tmat, gi)) {
+			while(DF(tmat, gi) != gi) {
+				tmat += DATOP(dir);
 				mj--; ibases++;
-				PUSH(p, type, len, 'I');
+				*p-- = 'I';
+				DET_DIR(dir, pdir);
 			}
 			tmat += DATOP(dir);
 			mj--; icnt++; ibases++;
-			PUSH(p, type, len, 'I');
-		} else if(DH(tmat, gi) == 0) {
-			while(mi > 0 && DE(tmat, gi) == gi-ge) {
-				tmat += DALEFT(dir); DET_DIR(dir, pdir);
+			*p-- = 'I';
+		} else if(DE(tmat, gi) == DH(tmat, gi)) {
+			while(DE(tmat, gi) != gi) {
+				tmat += DALEFT(dir);
 				mi--; dbases++;
-				PUSH(p, type, len, 'D');
+				*p-- = 'D';
+				DET_DIR(dir, pdir);
 			}
 			tmat += DALEFT(dir);
 			mi--; dcnt++; dbases++;
-			PUSH(p, type, len, 'D');
+			*p-- = 'D';
 		} else {
-			tmat += DTOPLEFT(dir); DET_DIR(dir, pdir);
+			tmat += DALEFT(dir); DET_DIR(dir, pdir);
+			tmat += DATOP(dir);
 			mi--;
 			mj--;
-			PUSH(p, type, len, 'M');
+			*p-- = 'M';
 		}
-	}
-	if(mj > 0) {
-		icnt++;
-		while(mj > 0) { mj--; ibases++; PUSH(p, type, len, 'I'); }
-	}
-	if(mi > 0) {
-		dcnt++;
-		while(mi > 0) { mi--; dbases++; PUSH(p, type, len, 'D'); }
 	}
 	aln->icnt = icnt;
 	aln->ibases = ibases;
@@ -482,6 +458,7 @@ diff_affine_dynamic_banded_trace(
 		*b++ = *++p;
 		l++;
 	}
+	*b = '\0';
 	aln->len = l;
 
 	#undef DET_DIR

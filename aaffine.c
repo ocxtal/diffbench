@@ -354,31 +354,13 @@ diag_affine_dynamic_banded_trace(
 			  mj = o.m.j,
 			  mp = o.m.p,
 			  mq = o.m.q;
-	sea_int_t ge = param.ge;
+	sea_int_t gi = param.gi;
 	char *tmat = (char *)mat + AADDR(mp, mq),
 		 *pu = (char *)mat + AADDR(mp-1, -bw/2),
-		 *pl = (char *)mat + AADDR(mp-1, bw/2-1);
+		 *pl = (char *)mat + AADDR(mp-1, bw/2-1),
+		 *p = aln->aln + aln->len - 1;
 	sea_int_t score, dir;
 	sea_int_t icnt = 0, ibases = 0, dcnt = 0, dbases = 0;
-
-	char *p = aln->aln + aln->len - 1;
-	char type = '\0';
-	int64_t len = 0;
-
-	#define PUSH(_p, _type, _len, _c) { \
-		if((_type) != (_c)) { \
-			*(_p)-- = (_type); \
-			while((_len) > 0) { \
-				int64_t _r = (_len) % 10; \
-				(_len) = (_len) / 10; \
-				*(_p)-- = _r + '0'; \
-			} \
-			(_type) = (_c); \
-			(_len) = 1; \
-		} else { \
-			(_len)++; \
-		} \
-	}
 
 	#define DET_DIR(dir, pl, pu) { \
 		(dir) = (ASCOREV(pl) > ASCOREV(pu)) ? DIR_V : DIR_H; \
@@ -390,31 +372,33 @@ diag_affine_dynamic_banded_trace(
 	while(mi > 0 || mj > 0) {
 		DET_DIR(dir, pl, pu);
 		if(score == ASCOREF(tmat)) {
-			while(ASCOREV(tmat) == ASCOREV(tmat + DATOP(dir)) + ge) {
-				tmat += DATOP(dir); DET_DIR(dir, pl, pu);
+			while(ASCOREF(tmat) != ASCOREV(tmat + DATOP(dir)) + gi) {
+				tmat += DATOP(dir);
 				mj--; ibases++;
-				PUSH(p, type, len, 'I');
+				*p-- = 'I';
+				DET_DIR(dir, pl, pu);
 			}
 			tmat += DATOP(dir);
 			mj--; icnt++; ibases++;
-			PUSH(p, type, len, 'I');
+			*p-- = 'I';
 			score = ASCOREV(tmat);
 		} else if(score == ASCOREE(tmat)) {
-			while(ASCOREV(tmat) == ASCOREV(tmat + DALEFT(dir)) + ge) {
-				tmat += DALEFT(dir); DET_DIR(dir, pl, pu);
+			while(ASCOREE(tmat) != ASCOREV(tmat + DALEFT(dir)) + gi) {
+				tmat += DALEFT(dir);
 				mi--; dbases++;
-				PUSH(p, type, len, 'D');
+				*p-- = 'D';
+				DET_DIR(dir, pl, pu);
 			}
 			tmat += DALEFT(dir);
 			mi--; dcnt++; dbases++;
-			PUSH(p, type, len, 'D');
+			*p-- = 'D';
 			score = ASCOREV(tmat);
 		} else {
 			tmat += DALEFT(dir); DET_DIR(dir, pl, pu);
 			tmat += DATOP(dir);
 			mi--;
 			mj--;
-			PUSH(p, type, len, 'M');
+			*p-- = 'M';
 			score = ASCOREV(tmat);
 		}
 	}
@@ -429,6 +413,7 @@ diag_affine_dynamic_banded_trace(
 		*b++ = *++p;
 		l++;
 	}
+	*b = '\0';
 	aln->len = l;
 
 	#undef DET_DIR
