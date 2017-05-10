@@ -683,12 +683,11 @@ void print_result(
 			bench_get(p.fill) + bench_get(p.trace) + bench_get(p.conv),
 			p.score);
 	} else {
-		printf("%ld\t%ld\t%ld\t%ld\t%ld\t",
+		printf("%ld\t%ld\t%ld\t%ld\t",
 			bench_get(p.fill),
 			bench_get(p.trace),
 			bench_get(p.conv),
-			bench_get(p.fill) + bench_get(p.trace) + bench_get(p.conv),
-			p.score);
+			bench_get(p.fill) + bench_get(p.trace) + bench_get(p.conv));
 	}
 	return;
 }
