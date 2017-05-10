@@ -224,6 +224,7 @@ struct bench_pair_s bench_adaptive_editdist(
 	char *buf = (char *)aligned_malloc(alen + blen);
 	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
 
+	int64_t klim = MAX2((int64_t)(3.0 * (double)p.len * (p.x + p.d) + 0.5), 10);
 
 	bench_t fill, trace, conv;
 	bench_init(fill);
@@ -233,7 +234,7 @@ struct bench_pair_s bench_adaptive_editdist(
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		bench_start(fill);
-		struct aed_fill_s f = aed_fill(ptr, (uint8_t const *)a, alen, (uint8_t const *)b, blen);
+		struct aed_fill_s f = aed_fill(ptr, (uint8_t const *)a, alen, (uint8_t const *)b, blen, klim);
 		score += f.score;
 		bench_end(fill);
 
@@ -529,7 +530,7 @@ struct bench_pair_s bench_gaba_linear(
 	char const *b,
 	int64_t blen)
 {
-	char *c = (char *)malloc(p.len);
+	char *c = (char *)malloc(p.len + 10);
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
@@ -583,7 +584,7 @@ struct bench_pair_s bench_gaba_affine(
 	char const *b,
 	int64_t blen)
 {
-	char *c = (char *)malloc(p.len);
+	char *c = (char *)malloc(p.len + 10);
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(

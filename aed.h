@@ -6,6 +6,7 @@
 #define _AED_H_INCLUDED
 
 struct aed_fill_s {
+	int64_t arem, brem;
 	int64_t score;
 	struct aed_block_s *blk;
 	int64_t rem;
@@ -17,7 +18,8 @@ struct aed_fill_s aed_fill(
 	uint8_t const *a,
 	int64_t alen,
 	uint8_t const *b,
-	int64_t blen);
+	int64_t blen,
+	int64_t klim);
 
 int64_t aed_trace(
 	char *buf,

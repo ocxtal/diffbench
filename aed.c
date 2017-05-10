@@ -30,11 +30,13 @@ struct aed_block_s {
 
 static inline
 struct aed_fill_s aed_fill_search_minpos(
-	int64_t arem,
-	int64_t brem,
-	int64_t score,
-	struct aed_block_s *blk)
+	struct aed_fill_s f,
+	struct aed_block_s *base)
 {
+	int64_t arem = f.arem;
+	int64_t brem = f.brem;
+	int64_t score = f.score;
+	struct aed_block_s *blk = f.blk;
 
 	debug("enter search_minpos arem(%lld), brem(%lld), score(%lld), blk(%p)", arem, brem, score, blk);
 
@@ -45,7 +47,7 @@ struct aed_fill_s aed_fill_search_minpos(
 	uint64_t dir = blk->dir<<(64 - j);
 
 	int64_t const score_max = INT32_MAX;
-	struct aed_fill_s hmin = { score_max }, vmin = { score_max };
+	struct aed_fill_s hmin = { .score = score_max }, vmin = { .score = score_max };
 
 	int64_t hscore = score_max, vscore = score_max;
 	for(int64_t i = 0; i < 128; i++) {
@@ -53,6 +55,9 @@ struct aed_fill_s aed_fill_search_minpos(
 			i, j, (int64_t)aidx, (int64_t)bidx, hscore, vscore, dir);
 
 		if(j-- == 0) {
+			if(blk == base) {
+				break;
+			}
 			dir = (--blk)->dir;
 			j = 63;
 
@@ -82,7 +87,7 @@ struct aed_fill_s aed_fill_search_minpos(
 				debug("pd(%lld), mc(%lld)", pc, mc);
 
 				if(aidx + bidx < 64 && vscore < vmin.score) {
-					vmin = (struct aed_fill_s){ vscore, blk - (j == 0), 0x3f & (j - 1), aidx };
+					vmin = (struct aed_fill_s){ 0, 0, vscore, blk - (j == 0), 0x3f & (j - 1), aidx };
 				}
 			}
 			bidx--;
@@ -103,7 +108,7 @@ struct aed_fill_s aed_fill_search_minpos(
 				debug("pd(%lld), mc(%lld)", pc, mc);
 
 				if(aidx + bidx < 64 && hscore < hmin.score) {
-					hmin = (struct aed_fill_s){ hscore, blk - (j == 0), 0x3f & (j - 1), 63 - bidx };
+					hmin = (struct aed_fill_s){ 0, 0, hscore, blk - (j == 0), 0x3f & (j - 1), 63 - bidx };
 				}
 			}
 			aidx--;
@@ -133,9 +138,10 @@ struct aed_fill_s aed_fill(
 	uint8_t const *a,
 	int64_t alen,
 	uint8_t const *b,
-	int64_t blen)
+	int64_t blen,
+	int64_t klim)
 {
-	debug("a(%p), alen(%lld), b(%p), blen(%lld)", a, alen, b, blen);
+	debug("a(%p), alen(%lld), b(%p), blen(%lld), klim(%lld)", a, alen, b, blen, klim);
 
 	/* init sequence pointers */
 	uint8_t const *alim = a + alen;
@@ -211,6 +217,11 @@ struct aed_fill_s aed_fill(
 	while(1) {
 		for(int64_t i = 0; i < 64; i++) {
 
+			if(score > klim) {
+				blk->dir = dir>>(64 - i);
+				blk->rem = i;
+				return((struct aed_fill_s){ 0, 0, score, blk, 0, 0 });				
+			}
 			if(a >= alim || b >= blim) {
 				if(a != atlim && b != btlim) {
 					debug("a(%p), alim(%p), b(%p), blim(%p)", a, alim, b, blim);
@@ -226,8 +237,7 @@ struct aed_fill_s aed_fill(
 					debug("dir(%llx), i(%lld), comp_dir(%llx)", dir, i, dir>>(64 - i));
 					blk->dir = dir>>(64 - i);
 					blk->rem = i;
-					return(aed_fill_search_minpos(
-						atlim - a, btlim - b, score, blk));
+					return((struct aed_fill_s){ atlim - a, btlim - b, score, blk, 0, 0 });
 				}
 			}
 
@@ -294,7 +304,15 @@ int64_t aed_trace(
 	void *base,
 	struct aed_fill_s f)
 {
+	f = aed_fill_search_minpos(f, base);
 	struct aed_block_s *blk = f.blk;
+
+	if(blk < (struct aed_block_s *)base) {
+		/* no alignment found */
+		buf[0] = '\0';
+		return(0);
+	}
+
 	int64_t rem = f.rem;
 	uint64_t idx = f.idx;
 	uint64_t dir = blk->dir<<(63 - rem);
