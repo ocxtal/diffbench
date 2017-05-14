@@ -165,7 +165,16 @@ void alignment_to_cigar(char *cig, char const *aln, int64_t len)
 			cnt++;
 			continue;
 		}
-		p += sprintf(p, "%ld%c", cnt, state);
+		char buf[16] = { '0' };
+		int64_t j = 0;
+		for(j = 0; cnt; j++) {
+			buf[j] = '0' + (cnt % 10); cnt /= 10;
+		}
+		for(int64_t k = 0; k <= j; k++) {
+			*p++ = buf[j - k];
+		}
+		*p++ = state;
+		// p += sprintf(p, "%ld%c", cnt, state);
 		state = aln[i]; cnt = 1;
 	}
 	return;
@@ -639,12 +648,14 @@ struct bench_pair_s bench_edlib(
 	int64_t blen)
 {
 	/** init context */
-	EdlibAlignConfig cf = (EdlibAlignConfig){ .k = -1, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
-	EdlibAlignConfig ct = (EdlibAlignConfig){ .k = -1, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_PATH };
+	int64_t klim = MAX2((int64_t)(3.0 * (double)p.len * (p.x + p.d) + 0.5), 10);
+	EdlibAlignConfig cf = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
+	EdlibAlignConfig ct = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_PATH };
 
-	bench_t fill, trace;
+	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
+	bench_init(conv);
 
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
@@ -660,12 +671,20 @@ struct bench_pair_s bench_edlib(
 		score += t.editDistance;
 		bench_end(trace);
 		
+		bench_start(conv);
+		char *cigar = edlibAlignmentToCigar(t.alignment, t.alignmentLength, EDLIB_CIGAR_STANDARD);
+		bench_end(conv);
+		free(cigar);
+
 		edlibFreeAlignResult(t);
 	}
+
+	trace.a -= fill.a;
 
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
+		.conv = conv,
 		.score = score
 	});
 }
@@ -736,14 +755,14 @@ int main(int argc, char *argv[])
 
 	print_result(p.table, bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
 	if(p.len < 35000) {
-		print_result(p.table, bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
+		// print_result(p.table, bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
 		print_result(p.table, bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
 	}
-	print_result(p.table, bench_diff_linear(p, a + 32, alen, b + 32, blen));
+	// print_result(p.table, bench_diff_linear(p, a + 32, alen, b + 32, blen));
 	print_result(p.table, bench_diff_affine(p, a + 32, alen, b + 32, blen));
-	print_result(p.table, bench_gaba_linear(p, a + 32, alen, b + 32, blen));
+	// print_result(p.table, bench_gaba_linear(p, a + 32, alen, b + 32, blen));
 	print_result(p.table, bench_gaba_affine(p, a + 32, alen, b + 32, blen));
-	// print_result(bench_edlib(p, a + 32, alen, b + 32, blen));
+	// print_result(p.table, bench_edlib(p, a + 32, alen, b + 32, blen));
 
 	if(p.table != 0) {
 		printf("\n");
