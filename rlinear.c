@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include <stdlib.h>						/* for definition of the NULL */
 
-#define BIT_WIDTH 			8
+#define BIT_WIDTH 			16
 #define BAND_WIDTH 			32
 
 #include "seqreader.h"
