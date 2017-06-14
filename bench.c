@@ -12,9 +12,15 @@
 #include "aed.h"
 #include "gaba/gaba.h"
 #include "edlib.h"
+#include "kvec.h"
 
 #define BIT_WIDTH 			8
 #define BAND_WIDTH 			32
+
+#define M 					( 1 )
+#define X 					( 1 )
+#define GI 					( 1 )
+#define GE 					( 1 )
 
 #include "ddiag.h"
 #include "diff.h"
@@ -181,28 +187,21 @@ void alignment_to_cigar(char *cig, char const *aln, int64_t len)
 }
 
 struct params {
-	int64_t len;
-	int64_t cnt;
-	double x;
-	double d;
-	char **pa;
-	char **pb;
+	char const *file;
+	uint64_t alen, blen, mlen;
+	uint64_t cnt;
+	double frac;
+	kvec_t(char) buf;
+	kvec_t(char *) seq;
+	kvec_t(uint64_t) len;
 	int table;
 };
 
 int parse_args(struct params *p, int c, char *arg)
 {
 	switch(c) {
-		/**
-		 * sequence generation parameters.
-		 */
-		case 'l': p->len = atoi((char *)arg); return 0;
-		case 'x': p->x = atof((char *)arg); return 0;
-		case 'd': p->d = atof((char *)arg); return 0;
-		/**
-		 * benchmarking options
-		 */
-		case 'c': p->cnt = atoi((char *)arg); return 0;
+		case 'i': p->file = arg; break;
+		case 'f': p->frac = atof(arg); break;
 		case 'a': printf("%s\n", arg); return 0;
 		case 't': p->table = 1; return 0;
 		/**
@@ -211,29 +210,157 @@ int parse_args(struct params *p, int c, char *arg)
 		case 'h':
 		default: print_usage(); return -1;
 	}
+	return 0;
 }
+
+
+struct naive_result_s {
+	int32_t score;
+	uint32_t path_length;
+	int64_t apos, bpos;
+	int64_t alen, blen;
+	char *path;
+};
+
+static inline
+struct naive_result_s naive_affine(
+	char const *a,
+	char const *b)
+{
+	/* utils */
+	#define _a(p, q, plen)	( (q) * ((plen) + 1) + (p) )
+	#define s(p, q)			_a(p, 3*(q), alen)
+	#define e(p, q)			_a(p, 3*(q)+1, alen)
+	#define f(p, q)			_a(p, 3*(q)+2, alen)
+	#define m(p, q)			( a[(p) - 1] == b[(q) - 1] ? m : x )
+
+	/* load gap penalties */
+	int8_t m = M;
+	int8_t x = -X;
+	int8_t gi = -GI;
+	int8_t ge = -GE;
+
+	/* calc lengths */
+	int64_t alen = strlen(a);
+	int64_t blen = strlen(b);
+
+	/* calc min */
+	int64_t min = INT16_MIN - x - 2*gi;
+
+	/* malloc matrix */
+	int16_t *mat = (int16_t *)malloc(
+		3 * (alen + 1) * (blen + 1) * sizeof(int16_t));
+
+	/* init */
+	struct naive_maxpos_s {
+		int16_t score;
+		int64_t apos;
+		int64_t bpos;
+	};
+
+	struct naive_maxpos_s max = { 0, 0, 0 };
+
+	mat[s(0, 0)] = mat[e(0, 0)] = mat[f(0, 0)] = 0;
+	for(int64_t i = 1; i < alen+1; i++) {
+		mat[s(i, 0)] = mat[e(i, 0)] = MAX2(min, gi + i * ge);
+		mat[f(i, 0)] = MAX2(min, gi + i * ge + gi - 1);
+	}
+	for(int64_t j = 1; j < blen+1; j++) {
+		mat[s(0, j)] = mat[f(0, j)] = MAX2(min, gi + j * ge);
+		mat[e(0, j)] = MAX2(min, gi + j * ge + gi - 1);
+	}
+
+	for(int64_t j = 1; j < blen+1; j++) {
+		for(int64_t i = 1; i < alen+1; i++) {
+			int16_t score_e = mat[e(i, j)] = MAX2(
+				mat[s(i - 1, j)] + gi + ge,
+				mat[e(i - 1, j)] + ge);
+			int16_t score_f = mat[f(i, j)] = MAX2(
+				mat[s(i, j - 1)] + gi + ge,
+				mat[f(i, j - 1)] + ge);
+			int16_t score = mat[s(i, j)] = MAX4(min,
+				mat[s(i - 1, j - 1)] + m(i, j),
+				score_e, score_f);
+			if(score > max.score
+			|| (score == max.score && (i + j) < (max.apos + max.bpos))) {
+				max = (struct naive_maxpos_s){
+					score, i, j
+				};
+			}
+		}
+	}
+	if(max.score == 0) {
+		max = (struct naive_maxpos_s){ 0, 0, 0 };
+	}
+
+	struct naive_result_s result = {
+		.score = max.score,
+		.apos = max.apos,
+		.bpos = max.bpos,
+		.path_length = max.apos + max.bpos + 1,
+		.path = (char *)malloc(max.apos + max.bpos + 64)
+	};
+	int64_t path_index = max.apos + max.bpos + 1;
+	while(max.apos > 0 || max.bpos > 0) {
+		/* M > I > D > X */
+		if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
+			while(mat[f(max.apos, max.bpos)] == mat[f(max.apos, max.bpos - 1)] + ge) {
+				max.bpos--;
+				result.path[--path_index] = 'D';
+			}
+			max.bpos--;
+			result.path[--path_index] = 'D';
+		} else if(mat[s(max.apos, max.bpos)] == mat[e(max.apos, max.bpos)]) {
+			while(mat[e(max.apos, max.bpos)] == mat[e(max.apos - 1, max.bpos)] + ge) {
+				max.apos--;
+				result.path[--path_index] = 'I';
+			}
+			max.apos--;
+			result.path[--path_index] = 'I';
+		} else {
+			result.path[--path_index] = 'M';
+			// result.path[--path_index] = 'D';
+			max.apos--;
+			max.bpos--;
+		}
+	}
+
+	result.alen = result.apos - max.apos;
+	result.blen = result.bpos - max.bpos;
+	result.apos = max.apos;
+	result.bpos = max.bpos;
+
+	result.path_length -= path_index;
+	for(uint64_t i = 0; i < result.path_length; i++) {
+		result.path[i] = result.path[path_index++];
+	}
+	result.path[result.path_length] = '\0';
+	free(mat);
+
+	#undef _a
+	#undef s
+	#undef e
+	#undef f
+	#undef m
+	return(result);
+}
+
 
 struct bench_pair_s {
 	bench_t fill, trace, conv;
-	int64_t score;
+	int64_t score, fail;
 };
 
 static inline
 struct bench_pair_s bench_adaptive_editdist(
-	struct params p,
-	char const *a,
-	int64_t alen,
-	char const *b,
-	int64_t blen)
+	struct params p)
 {
-	void *base = aligned_malloc(2 * 4 * sizeof(uint64_t) * (alen + blen + 65));
+	void *base = aligned_malloc(2 * 4 * sizeof(uint64_t) * (p.alen + p.blen + 65));
 	memset(base, 0, 4 * sizeof(uint64_t));
 	void *ptr = base + 4 * sizeof(uint64_t);
 
-	char *buf = (char *)aligned_malloc(alen + blen);
-	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
-
-	int64_t klim = MAX2((int64_t)(3.0 * (double)p.len * (p.x + p.d) + 0.5), 10);
+	char *buf = (char *)aligned_malloc(p.alen + p.blen);
+	char *cigar = malloc(sizeof(char) * (p.alen + p.blen + 1));
 
 	bench_t fill, trace, conv;
 	bench_init(fill);
@@ -242,13 +369,15 @@ struct bench_pair_s bench_adaptive_editdist(
 
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
+		int64_t klim = MAX2((int64_t)(1.5 * (double)(kv_at(p.len, i * 2) + kv_at(p.len, i * 2 + 1)) * 0.2 + 0.5), 10);
+
 		bench_start(fill);
-		struct aed_fill_s f = aed_fill(ptr, (uint8_t const *)a, alen, (uint8_t const *)b, blen, klim);
+		struct aed_fill_s f = aed_fill(ptr, (uint8_t const *)kv_at(p.seq, i * 2), kv_at(p.len, i * 2), (uint8_t const *)kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1), klim);
 		score += f.score;
 		bench_end(fill);
 
 		bench_start(trace);
-		int64_t len = aed_trace(buf, alen + blen, ptr, f);
+		int64_t len = aed_trace(buf, kv_at(p.len, i * 2) + kv_at(p.len, i * 2 + 1), ptr, f);
 		bench_end(trace);
 
 		bench_start(conv);
@@ -269,41 +398,36 @@ struct bench_pair_s bench_adaptive_editdist(
 
 static inline
 struct bench_pair_s bench_ddiag_linear(
-	struct params p,
-	char const *a,
-	int64_t alen,
-	char const *b,
-	int64_t blen)
+	struct params p)
 {
-	struct sea_params param = { 0, 1, -2, -1, 0, 0, 0, 50, 32 };
+	struct sea_params param = { 0, M, -X, -(GI + GE), 0, 0, 0, 50, 32 };
 
 
-	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
+	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (p.alen + p.blen + 32 + 1) + sizeof(struct sea_result));
 	aln->aln = (void *)((struct sea_result *)aln + 1);
 	((char *)(aln->aln))[0] = 0;
 	aln->score = 0;
 	aln->ctx = NULL;
 
 
-	int64_t alnsize = diag_linear_dynamic_banded_matsize(alen, blen, 32);
+	int64_t alnsize = diag_linear_dynamic_banded_matsize(p.alen, p.blen, 32);
 	void *base = aligned_malloc(alnsize);
 	memset(base, 0, 32 * 2 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 2 * sizeof(int16_t);
 
-	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
+	char *cigar = malloc(sizeof(char) * (p.alen + p.blen + 1));
 
 	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
 	bench_init(conv);
 
-	int64_t score = 0;
+	int64_t score = 0, fail = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		aln->score = 0;
-		aln->a = a; aln->apos = 0; aln->alen = alen;
-		aln->b = b; aln->bpos = 0; aln->blen = blen;
+		aln->a = kv_at(p.seq, i * 2);     aln->apos = 0; aln->alen = kv_at(p.len, i * 2);
+		aln->b = kv_at(p.seq, i * 2 + 1); aln->bpos = 0; aln->blen = kv_at(p.len, i * 2 + 1);
 		aln->len = alnsize;
-
 
 		bench_start(fill);
 		struct mpos o = diag_linear_dynamic_banded_fill(aln, param, mat);
@@ -315,6 +439,9 @@ struct bench_pair_s bench_ddiag_linear(
 		bench_start(trace);
 		diag_linear_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
+		if(0.8 * (kv_at(p.len, i * 2) - p.mlen) > aln->alen || 0.8 * (kv_at(p.len, i * 2 + 1) - p.mlen) > aln->blen) {
+			fail++;
+		}
 
 
 		bench_start(conv);
@@ -329,45 +456,42 @@ struct bench_pair_s bench_ddiag_linear(
 		.fill = fill,
 		.trace = trace,
 		.conv = conv,
-		.score = score
+		.score = score,
+		.fail = fail
 	});
 }
 
 static inline
 struct bench_pair_s bench_ddiag_affine(
-	struct params p,
-	char const *a,
-	int64_t alen,
-	char const *b,
-	int64_t blen)
+	struct params p)
 {
-	struct sea_params param = { 0, 1, -2, -2, -1, 0, 0, 50, 32 };
+	struct sea_params param = { 0, M, -X, -(GI + GE), -GE, 0, 0, 50, 32 };
 
 
-	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
+	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (p.alen + p.blen + 32 + 1) + sizeof(struct sea_result));
 	aln->aln = (void *)((struct sea_result *)aln + 1);
 	((char *)(aln->aln))[0] = 0;
 	aln->score = 0;
 	aln->ctx = NULL;
 
 
-	int64_t alnsize = diag_affine_dynamic_banded_matsize(alen, blen, 32);
+	int64_t alnsize = diag_affine_dynamic_banded_matsize(p.alen, p.blen, 32);
 	void *base = aligned_malloc(alnsize);
 	memset(base, 0, 32 * 6 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 6 * sizeof(int16_t);
 
-	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
+	char *cigar = malloc(sizeof(char) * (p.alen + p.blen + 1));
 
 	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
 	bench_init(conv);
 
-	int64_t score = 0;
+	int64_t score = 0, fail = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		aln->score = 0;
-		aln->a = a; aln->apos = 0; aln->alen = alen;
-		aln->b = b; aln->bpos = 0; aln->blen = blen;
+		aln->a = kv_at(p.seq, i * 2);     aln->apos = 0; aln->alen = kv_at(p.len, i * 2);
+		aln->b = kv_at(p.seq, i * 2 + 1); aln->bpos = 0; aln->blen = kv_at(p.len, i * 2 + 1);
 		aln->len = alnsize;
 
 
@@ -381,6 +505,10 @@ struct bench_pair_s bench_ddiag_affine(
 		bench_start(trace);
 		diag_affine_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
+		if(0.8 * (kv_at(p.len, i * 2) - p.mlen) > aln->alen || 0.8 * (kv_at(p.len, i * 2 + 1) - p.mlen) > aln->blen) {
+			fail++;
+		}
+		// fprintf(stderr, "(%ld, %ld), (%d, %d), %d\n", kv_at(p.len, i * 2), kv_at(p.len, i * 2 + 1), aln->alen, aln->blen, aln->score);
 
 
 		bench_start(conv);
@@ -395,45 +523,42 @@ struct bench_pair_s bench_ddiag_affine(
 		.fill = fill,
 		.trace = trace,
 		.conv = conv,
-		.score = score
+		.score = score,
+		.fail = fail
 	});
 }
 
 static inline
 struct bench_pair_s bench_diff_linear(
-	struct params p,
-	char const *a,
-	int64_t alen,
-	char const *b,
-	int64_t blen)
+	struct params p)
 {
-	struct sea_params param = { 0, 1, -2, -1, 0, 0, 0, 50, 32 };
+	struct sea_params param = { 0, M, -X, -(GI + GE), 0, 0, 0, 50, 32 };
 
 
-	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result) + 1000000);
+	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (p.alen + p.blen + 32 + 1) + sizeof(struct sea_result) + 1000000);
 	aln->aln = (void *)((struct sea_result *)aln + 1);
 	((char *)(aln->aln))[0] = 0;
 	aln->score = 0;
 	aln->ctx = NULL;
 
 
-	int64_t alnsize = diff_linear_dynamic_banded_matsize(alen, blen, 32);
+	int64_t alnsize = diff_linear_dynamic_banded_matsize(p.alen, p.blen, 32);
 	void *base = aligned_malloc(alnsize);
 	memset(base, 0, 32 * 2 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 2 * sizeof(int16_t);
 
-	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
+	char *cigar = malloc(sizeof(char) * (p.alen + p.blen + 1));
 
 	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
 	bench_init(conv);
 
-	int64_t score = 0;
+	int64_t score = 0, fail = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		aln->score = 0;
-		aln->a = a; aln->apos = 0; aln->alen = alen;
-		aln->b = b; aln->bpos = 0; aln->blen = blen;
+		aln->a = kv_at(p.seq, i * 2);     aln->apos = 0; aln->alen = kv_at(p.len, i * 2);
+		aln->b = kv_at(p.seq, i * 2 + 1); aln->bpos = 0; aln->blen = kv_at(p.len, i * 2 + 1);
 		aln->len = alnsize;
 
 
@@ -447,6 +572,9 @@ struct bench_pair_s bench_diff_linear(
 		score += aln->score;
 		diff_linear_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
+		if(0.8 * (kv_at(p.len, i * 2) - p.mlen) > aln->alen || 0.8 * (kv_at(p.len, i * 2 + 1) - p.mlen) > aln->blen) {
+			fail++;
+		}
 
 
 		bench_start(conv);
@@ -461,45 +589,42 @@ struct bench_pair_s bench_diff_linear(
 		.fill = fill,
 		.trace = trace,
 		.conv = conv,
-		.score = score
+		.score = score,
+		.fail = fail
 	});
 }
 
 static inline
 struct bench_pair_s bench_diff_affine(
-	struct params p,
-	char const *a,
-	int64_t alen,
-	char const *b,
-	int64_t blen)
+	struct params p)
 {
-	struct sea_params param = { 0, 1, -2, -2, -1, 0, 0, 50, 32 };
+	struct sea_params param = { 0, M, -X, -(GI + GE), -GE, 0, 0, 50, 32 };
 
 
-	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (alen + blen + 32 + 1) + sizeof(struct sea_result));
+	struct sea_result *aln = (struct sea_result *)aligned_malloc(sizeof(char) * (p.alen + p.blen + 32 + 1) + sizeof(struct sea_result));
 	aln->aln = (void *)((struct sea_result *)aln + 1);
 	((char *)(aln->aln))[0] = 0;
 	aln->score = 0;
 	aln->ctx = NULL;
 
 
-	int64_t alnsize = diff_affine_dynamic_banded_matsize(alen, blen, 32);
+	int64_t alnsize = diff_affine_dynamic_banded_matsize(p.alen, p.blen, 32);
 	void *base = aligned_malloc(alnsize);
 	memset(base, 0, 32 * 6 * sizeof(int16_t));
 	char *mat = (char *)base + 32 * 6 * sizeof(int16_t);
 
-	char *cigar = malloc(sizeof(char) * (alen + blen + 1));
+	char *cigar = malloc(sizeof(char) * (p.alen + p.blen + 1));
 
 	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
 	bench_init(conv);
 
-	int64_t score = 0;
+	int64_t score = 0, fail = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		aln->score = 0;
-		aln->a = a; aln->apos = 0; aln->alen = alen;
-		aln->b = b; aln->bpos = 0; aln->blen = blen;
+		aln->a = kv_at(p.seq, i * 2);     aln->apos = 0; aln->alen = kv_at(p.len, i * 2);
+		aln->b = kv_at(p.seq, i * 2 + 1); aln->bpos = 0; aln->blen = kv_at(p.len, i * 2 + 1);
 		aln->len = alnsize;
 
 
@@ -513,6 +638,10 @@ struct bench_pair_s bench_diff_affine(
 		score += aln->score;
 		diff_affine_dynamic_banded_trace(aln, param, mat, o);
 		bench_end(trace);
+		if(0.8 * (kv_at(p.len, i * 2) - p.mlen) > aln->alen || 0.8 * (kv_at(p.len, i * 2 + 1) - p.mlen) > aln->blen) {
+			fail++;
+		}
+		// fprintf(stderr, "(%ld, %ld), (%d, %d), %d\n", kv_at(p.len, i * 2), kv_at(p.len, i * 2 + 1), aln->alen, aln->blen, aln->score);
 
 
 		bench_start(conv);
@@ -527,26 +656,21 @@ struct bench_pair_s bench_diff_affine(
 		.fill = fill,
 		.trace = trace,
 		.conv = conv,
-		.score = score
+		.score = score,
+		.fail = fail
 	});
 }
 
 static inline
 struct bench_pair_s bench_gaba_linear(
-	struct params p,
-	char const *a,
-	int64_t alen,
-	char const *b,
-	int64_t blen)
+	struct params p)
 {
-	char *c = (char *)malloc(p.len + 10);
+	char *c = (char *)malloc(p.alen + p.blen + 10);
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
 		.xdrop = 50,
-		GABA_SCORE_SIMPLE(1, 2, 0, 1)));
-	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
-	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
+		GABA_SCORE_SIMPLE(M, X, 0, GI + GE)));
 
 	bench_t fill, trace, conv;
 	bench_init(fill);
@@ -556,9 +680,11 @@ struct bench_pair_s bench_gaba_linear(
 	void const *lim = (void const *)0x800000000000;
 
 	gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
-	int64_t score = 0;
+	int64_t score = 0, fail = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		gaba_dp_flush(dp, lim, lim);
+		struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)kv_at(p.seq, i * 2),     kv_at(p.len, i * 2));
+		struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1));
 
 		bench_start(fill);
 		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0);
@@ -568,9 +694,12 @@ struct bench_pair_s bench_gaba_linear(
 		bench_start(trace);
 		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL, NULL);
 		bench_end(trace);
+		if(0.8 * (kv_at(p.len, i * 2) - p.mlen) > r->sec->alen || 0.8 * (kv_at(p.len, i * 2 + 1) - p.mlen) > r->sec->blen) {
+			fail++;
+		}
 
 		bench_start(conv);
-		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
+		gaba_dp_dump_cigar_forward(c, p.alen + p.blen, r->path->array, 0, r->path->len);
 		bench_end(conv);
 	}
 	gaba_dp_clean(dp);
@@ -581,26 +710,21 @@ struct bench_pair_s bench_gaba_linear(
 		.fill = fill,
 		.trace = trace,
 		.conv = conv,
-		.score = score
+		.score = score,
+		.fail = fail
 	});
 }
 
 static inline
 struct bench_pair_s bench_gaba_affine(
-	struct params p,
-	char const *a,
-	int64_t alen,
-	char const *b,
-	int64_t blen)
+	struct params p)
 {
-	char *c = (char *)malloc(p.len + 10);
+	char *c = (char *)malloc(p.alen + p.blen + 10);
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
 		.xdrop = 50,
-		GABA_SCORE_SIMPLE(1, 2, 1, 1)));
-	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, alen);
-	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, blen);
+		GABA_SCORE_SIMPLE(M, X, GI, GE)));
 
 	bench_t fill, trace, conv;
 	bench_init(fill);
@@ -610,9 +734,11 @@ struct bench_pair_s bench_gaba_affine(
 	void const *lim = (void const *)0x800000000000;
 
 	gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
-	int64_t score = 0;
+	int64_t score = 0, fail = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		gaba_dp_flush(dp, lim, lim);
+		struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)kv_at(p.seq, i * 2),     kv_at(p.len, i * 2));
+		struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1));
 
 		bench_start(fill);
 		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0);
@@ -623,8 +749,24 @@ struct bench_pair_s bench_gaba_affine(
 		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL, NULL);
 		bench_end(trace);
 
+
+		fprintf(stderr, "(%ld, %ld), (%u, %u), %ld\n", kv_at(p.len, i * 2), kv_at(p.len, i * 2 + 1), r->sec->alen, r->sec->blen, f->max);
+		if(0.8 * (kv_at(p.len, i * 2) - p.mlen) > r->sec->alen || 0.8 * (kv_at(p.len, i * 2 + 1) - p.mlen) > r->sec->blen) {
+			fail++;
+
+			struct naive_result_s nr = naive_affine(kv_at(p.seq, i * 2), kv_at(p.seq, i * 2 + 1));
+			fprintf(stderr, "%s\n", nr.path);
+			free(nr.path);
+		}
+
+
+		if(r == NULL) {
+			fprintf(stderr, "%s\n%s\n", kv_at(p.seq, i * 2), kv_at(p.seq, i * 2 + 1));
+			continue;
+		}
+
 		bench_start(conv);
-		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
+		gaba_dp_dump_cigar_forward(c, p.alen + p.blen, r->path->array, 0, r->path->len);
 		bench_end(conv);
 	}
 	gaba_dp_clean(dp);
@@ -635,23 +777,16 @@ struct bench_pair_s bench_gaba_affine(
 		.fill = fill,
 		.trace = trace,
 		.conv = conv,
-		.score = score
+		.score = score,
+		.fail = fail
 	});
 }
 
 static inline
 struct bench_pair_s bench_edlib(
-	struct params p,
-	char const *a,
-	int64_t alen,
-	char const *b,
-	int64_t blen)
+	struct params p)
 {
 	/** init context */
-	int64_t klim = MAX2((int64_t)(3.0 * (double)p.len * (p.x + p.d) + 0.5), 10);
-	EdlibAlignConfig cf = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
-	EdlibAlignConfig ct = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_PATH };
-
 	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
@@ -659,15 +794,19 @@ struct bench_pair_s bench_edlib(
 
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
+		int64_t klim = MAX2((int64_t)(1.5 * (double)(kv_at(p.len, i * 2) + kv_at(p.len, i * 2 + 1)) * 0.2 + 0.5), 10);
+		EdlibAlignConfig cf = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
+		EdlibAlignConfig ct = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_PATH };
+
 		bench_start(fill);
-		EdlibAlignResult f = edlibAlign(a, alen, b, blen, cf);
+		EdlibAlignResult f = edlibAlign(kv_at(p.seq, i * 2), kv_at(p.len, i * 2), kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1), cf);
 		score += f.editDistance;
 		bench_end(fill);
 
 		edlibFreeAlignResult(f);
 
 		bench_start(trace);
-		EdlibAlignResult t = edlibAlign(a, alen, b, blen, ct);
+		EdlibAlignResult t = edlibAlign(kv_at(p.seq, i * 2), kv_at(p.len, i * 2), kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1), ct);
 		score += t.editDistance;
 		bench_end(trace);
 		
@@ -696,12 +835,13 @@ void print_result(
 	struct bench_pair_s p)
 {
 	if(table == 0) {
-		printf("%ld\t%ld\t%ld\t%ld\t%ld\n",
+		printf("%ld\t%ld\t%ld\t%ld\t%ld\t%ld\n",
 			bench_get(p.fill),
 			bench_get(p.trace),
 			bench_get(p.conv),
 			bench_get(p.fill) + bench_get(p.trace) + bench_get(p.conv),
-			p.score);
+			p.score,
+			p.fail);
 	} else {
 		printf("%ld\t%ld\t%ld\t%ld\t",
 			bench_get(p.fill),
@@ -717,59 +857,89 @@ void print_result(
  */
 int main(int argc, char *argv[])
 {
-	struct params p = (struct params){
-		.len = 10000,
-		.cnt = 10000,
-		.x = 0.1,
-		.d = 0.1,
-		.pa = p.pb = NULL
-	};
+	struct params p = { .frac = 1.0, .mlen = 100 };
 
 	/** parse args */
 	int i;
-	while((i = getopt(argc, argv, "l:x:d:c:a:th")) != -1) {
+	while((i = getopt(argc, argv, "i:f:a:th")) != -1) {
 		if(parse_args(&p, i, optarg) != 0) { exit(1); }
 	}
 
-	if(p.table == 0) {
-		printf("len\t%ld\ncnt\t%ld\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
-	} else {
-		printf("%ld\t", p.len);
+	kv_init(p.buf);
+	kv_init(p.seq);
+	kv_init(p.len);
+
+	for(i = 0; i < 64; i++) {
+		kv_push(p.buf, '\0');
 	}
 
-
-	char *a = generate_random_sequence(p.len);
-	char *b = generate_mutated_sequence(a, p.len, p.x, p.d, 1024);
-
-	a = add_tail(a, 0, 500);
-	b = add_tail(b, 0, 500);
-
-	int64_t alen = strlen(a);
-	int64_t blen = strlen(b);
-
-	encode(a, alen);
-	encode(b, blen);
-
-	a = add_margin((uint8_t *)a, alen, 32, 32);
-	b = add_margin((uint8_t *)b, blen, 32, 32);
-
-	print_result(p.table, bench_adaptive_editdist(p, a + 32, alen, b + 32, blen));
-	if(p.len < 35000) {
-		// print_result(p.table, bench_ddiag_linear(p, a + 32, alen, b + 32, blen));
-		print_result(p.table, bench_ddiag_affine(p, a + 32, alen, b + 32, blen));
+	#define _finish(_base) { \
+		uint64_t l = (uint64_t)(p.frac * (kv_size(p.buf) - base)); \
+		for(i = 0; i < p.mlen; i++) { \
+			kv_push(p.buf, random_base()); \
+		} \
+		if(p.cnt++ % 2) { \
+			p.blen = MAX2(p.blen, l + p.mlen); \
+		} else { \
+			p.alen = MAX2(p.alen, l + p.mlen); \
+		} \
+		kv_push(p.len, l + p.mlen); \
+		kv_push(p.seq, (char *)base); \
+		p.buf.n = base + l + p.mlen; \
+		kv_push(p.buf, '\0'); \
 	}
-	// print_result(p.table, bench_diff_linear(p, a + 32, alen, b + 32, blen));
-	print_result(p.table, bench_diff_affine(p, a + 32, alen, b + 32, blen));
-	// print_result(p.table, bench_gaba_linear(p, a + 32, alen, b + 32, blen));
-	print_result(p.table, bench_gaba_affine(p, a + 32, alen, b + 32, blen));
-	// print_result(p.table, bench_edlib(p, a + 32, alen, b + 32, blen));
+
+	FILE *fp = strcmp(p.file, "-") == 0 ? stdin : fopen(p.file, "r");
+	int c;
+	uint64_t base = kv_size(p.buf);
+	while((c = getc(fp)) != EOF) {
+		if(c == '\n') {
+			_finish(base);
+			base = kv_size(p.buf);
+		} else {
+			kv_push(p.buf, c);
+		}
+	}
+	_finish(base);
+	p.cnt /= 2;
+	for(i = 0; i < 64; i++) {
+		kv_push(p.buf, '\0');
+	}
+	if(fp != stdin) {
+		fclose(fp);
+	}
+
+	for(i = 0; i < kv_size(p.seq); i++) {
+		kv_at(p.seq, i) += (uint64_t)p.buf.a;
+	}
+	for(i = 0; i < kv_size(p.buf); i++) {
+		if(kv_at(p.buf, i) == '\0') { continue; }
+		switch(kv_at(p.buf, i)) {
+			default:
+			case 'A': case 'a': c = 1; break;
+			case 'C': case 'c': c = 2; break;
+			case 'G': case 'g': c = 4; break;
+			case 'T': case 't': c = 8; break;
+		}
+		kv_at(p.buf, i) = c;
+	}
+
+	print_result(p.table, bench_adaptive_editdist(p));
+	// print_result(p.table, bench_ddiag_linear(p));
+	print_result(p.table, bench_ddiag_affine(p));
+	// print_result(p.table, bench_diff_linear(p));
+	print_result(p.table, bench_diff_affine(p));
+	// print_result(p.table, bench_gaba_linear(p));
+	print_result(p.table, bench_gaba_affine(p));
+	print_result(p.table, bench_edlib(p));
 
 	if(p.table != 0) {
 		printf("\n");
 	}
 
-	free(a);
-	free(b);
+	kv_destroy(p.buf);
+	kv_destroy(p.seq);
+	kv_destroy(p.len);
 	return 0;
 }
 
