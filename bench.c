@@ -3,6 +3,7 @@
  * @file bench.c
  * @brief speed benchmark of libsea
  */
+#include <alloca.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -14,7 +15,7 @@
 #include "edlib.h"
 #include "kvec.h"
 
-#define BIT_WIDTH 			8
+#define BIT_WIDTH			8
 #define BAND_WIDTH 			32
 
 #define M 					( 1 )
@@ -306,19 +307,19 @@ struct naive_result_s naive_affine(
 		if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
 			while(mat[f(max.apos, max.bpos)] == mat[f(max.apos, max.bpos - 1)] + ge) {
 				max.bpos--;
-				result.path[--path_index] = 'D';
+				result.path[--path_index] = 'I';
 			}
 			max.bpos--;
-			result.path[--path_index] = 'D';
+			result.path[--path_index] = 'I';
 		} else if(mat[s(max.apos, max.bpos)] == mat[e(max.apos, max.bpos)]) {
 			while(mat[e(max.apos, max.bpos)] == mat[e(max.apos - 1, max.bpos)] + ge) {
 				max.apos--;
-				result.path[--path_index] = 'I';
+				result.path[--path_index] = 'D';
 			}
 			max.apos--;
-			result.path[--path_index] = 'I';
+			result.path[--path_index] = 'D';
 		} else {
-			result.path[--path_index] = 'M';
+			result.path[--path_index] = a[max.apos - 1] == b[max.bpos - 1] ? 'M' : 'X';
 			// result.path[--path_index] = 'D';
 			max.apos--;
 			max.bpos--;
@@ -716,6 +717,44 @@ struct bench_pair_s bench_gaba_linear(
 }
 
 static inline
+void print_path(
+	struct gaba_alignment_s *r)
+{
+	uint64_t plen = r->path->len, cnt = 0;
+	uint32_t const *path = r->path->array;
+	uint64_t path_array = (uint64_t)path[0] | (((uint64_t)path[1])<<32);
+	char *ptr = alloca(plen);
+	char *p = ptr;
+
+	path += 2;
+	while(plen > 0) {
+		if((path_array & 0x03) == 0x01) {
+			*p++ = 'M'; plen -= 2;
+			path_array >>= 1;
+			if(++cnt == 32) {
+				path_array |= ((uint64_t)*path++)<<32;
+				cnt = 0;
+			}
+			path_array >>= 1;
+			if(++cnt == 32) {
+				path_array |= ((uint64_t)*path++)<<32;
+				cnt = 0;
+			}
+		} else {
+			*p++ = (path_array & 0x01) ? 'I' : 'D'; plen--;
+			path_array >>= 1;
+			if(++cnt == 32) {
+				path_array |= ((uint64_t)*path++)<<32;
+				cnt = 0;
+			}
+		}
+	}
+	*p = '\0';
+	fprintf(stderr, "%s\n", ptr);
+	return;
+}
+
+static inline
 struct bench_pair_s bench_gaba_affine(
 	struct params p)
 {
@@ -750,13 +789,39 @@ struct bench_pair_s bench_gaba_affine(
 		bench_end(trace);
 
 
-		fprintf(stderr, "(%ld, %ld), (%u, %u), %ld\n", kv_at(p.len, i * 2), kv_at(p.len, i * 2 + 1), r->sec->alen, r->sec->blen, f->max);
 		if(0.8 * (kv_at(p.len, i * 2) - p.mlen) > r->sec->alen || 0.8 * (kv_at(p.len, i * 2 + 1) - p.mlen) > r->sec->blen) {
 			fail++;
 
+/*
 			struct naive_result_s nr = naive_affine(kv_at(p.seq, i * 2), kv_at(p.seq, i * 2 + 1));
+
+			fprintf(stderr, "(%ld, %ld), (%u, %u), %ld, (%ld, %ld)\n", kv_at(p.len, i * 2), kv_at(p.len, i * 2 + 1), r->sec->alen, r->sec->blen, f->max, nr.alen, nr.blen);
+			fprintf(stderr, "len(%lu)\n", strlen(nr.path));
+
+			char const *a = kv_at(p.seq, i * 2), *b = kv_at(p.seq, i * 2 + 1);
+			for(uint64_t j = 0, k = 0; j < strlen(nr.path); j++) {
+				if(nr.path[j] != 'I') {
+					fprintf(stderr, "%c", " AC G   T"[a[k++]]);
+				} else {
+					fprintf(stderr, "-");
+				}
+			}
+			fprintf(stderr, "\n");
+			for(uint64_t j = 0, k = 0; j < strlen(nr.path); j++) {
+				if(nr.path[j] != 'D') {
+					fprintf(stderr, "%c", " AC G   T"[b[k++]]);
+				} else {
+					fprintf(stderr, "-");
+				}
+			}
+			fprintf(stderr, "\n");
+
 			fprintf(stderr, "%s\n", nr.path);
+			print_path(r);
+
 			free(nr.path);
+
+*/
 		}
 
 
@@ -931,7 +996,7 @@ int main(int argc, char *argv[])
 	print_result(p.table, bench_diff_affine(p));
 	// print_result(p.table, bench_gaba_linear(p));
 	print_result(p.table, bench_gaba_affine(p));
-	print_result(p.table, bench_edlib(p));
+	// print_result(p.table, bench_edlib(p));
 
 	if(p.table != 0) {
 		printf("\n");
