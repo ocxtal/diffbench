@@ -794,7 +794,7 @@ struct bench_pair_s bench_gaba_affine(
 		if(0.8 * (kv_at(p.len, i * 2) - p.mlen) > r->sec->alen || 0.8 * (kv_at(p.len, i * 2 + 1) - p.mlen) > r->sec->blen) {
 			fail++;
 
-/*
+#ifdef DEBUG
 			struct naive_result_s nr = naive_affine(kv_at(p.seq, i * 2), kv_at(p.seq, i * 2 + 1));
 
 			fprintf(stderr, "(%ld, %ld), (%u, %u), %ld, (%ld, %ld)\n", kv_at(p.len, i * 2), kv_at(p.len, i * 2 + 1), r->sec->alen, r->sec->blen, f->max, nr.alen, nr.blen);
@@ -822,7 +822,7 @@ struct bench_pair_s bench_gaba_affine(
 			print_path(r);
 
 			free(nr.path);
-*/
+#endif
 
 		}
 
