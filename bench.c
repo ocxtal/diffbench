@@ -190,7 +190,7 @@ void alignment_to_cigar(char *cig, char const *aln, int64_t len)
 struct params {
 	char const *file;
 	uint64_t alen, blen, mlen;
-	uint64_t cnt;
+	uint64_t cnt, max;
 	double frac;
 	kvec_t(char) buf;
 	kvec_t(char *) seq;
@@ -202,6 +202,7 @@ int parse_args(struct params *p, int c, char *arg)
 {
 	switch(c) {
 		case 'i': p->file = arg; break;
+		case 'l': p->max = atoi(arg); break;
 		case 'f': p->frac = atof(arg); break;
 		case 'a': printf("%s\n", arg); return 0;
 		case 't': p->table = 1; return 0;
@@ -380,6 +381,7 @@ struct bench_pair_s bench_adaptive_editdist(
 		bench_start(trace);
 		int64_t len = aed_trace(buf, kv_at(p.len, i * 2) + kv_at(p.len, i * 2 + 1), ptr, f);
 		bench_end(trace);
+		// fprintf(stderr, "len(%ld)\n", len);
 
 		bench_start(conv);
 		alignment_to_cigar(cigar, buf, len);
@@ -820,8 +822,8 @@ struct bench_pair_s bench_gaba_affine(
 			print_path(r);
 
 			free(nr.path);
-
 */
+
 		}
 
 
@@ -922,11 +924,11 @@ void print_result(
  */
 int main(int argc, char *argv[])
 {
-	struct params p = { .frac = 1.0, .mlen = 100 };
+	struct params p = { .max = 33000, .frac = 1.0, .mlen = 100 };
 
 	/** parse args */
 	int i;
-	while((i = getopt(argc, argv, "i:f:a:th")) != -1) {
+	while((i = getopt(argc, argv, "i:l:f:a:th")) != -1) {
 		if(parse_args(&p, i, optarg) != 0) { exit(1); }
 	}
 
@@ -939,7 +941,7 @@ int main(int argc, char *argv[])
 	}
 
 	#define _finish(_base) { \
-		uint64_t l = (uint64_t)(p.frac * (kv_size(p.buf) - base)); \
+		uint64_t l = (uint64_t)MIN2(p.max, (p.frac * (kv_size(p.buf) - base))); \
 		for(i = 0; i < p.mlen; i++) { \
 			kv_push(p.buf, random_base()); \
 		} \
