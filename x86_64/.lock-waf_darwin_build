@@ -1,8 +1,0 @@
-argv = ['../../waf', 'configure']
-environ = {'HOME': '/Users/suzukihajime', '__CF_USER_TEXT_ENCODING': '0x1F5:0:0', '_': '/Users/suzukihajime/docs/src/aln/simd/x86_64/../../waf', 'SHLVL': '1', 'LOGNAME': 'suzukihajime', 'SAVEHIST': '1000', 'SECURITYSESSIONID': '186a4', 'OLDPWD': '/Users/suzukihajime/docs/src/aln/simd', 'TERM_PROGRAM_VERSION': '326', 'TMPDIR': '/var/folders/nr/0xl98d8n66bgr95p4m7nymvh0000gn/T/', 'SSH_AUTH_SOCK': '/tmp/launch-3nwO9C/Listeners', 'TERM_PROGRAM': 'Apple_Terminal', '__PYVENV_LAUNCHER__': '/usr/local/bin/python', 'PROMPT': '%~ %# ', 'PWD': '/Users/suzukihajime/docs/src/aln/simd/x86_64', '__CHECKFIX1436934': '1', 'SHELL': '/bin/zsh', 'DISPLAY': '/tmp/launch-ueSHM0/org.macosforge.xquartz:0', 'USER': 'suzukihajime', 'TERM': 'vt100', 'HISTFILE': '/Users/suzukihajime/.zsh_history', 'PATH': '/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/X11/bin:/usr/texbin:/usr/local/opt/llvm/bin', 'TERM_SESSION_ID': 'B61BA985-ADA5-4896-90E2-2F738C38A7DB', 'EDITOR': 'rsub', 'HISTSIZE': '1000', 'LC_CTYPE': 'UTF-8', 'Apple_PubSub_Socket_Render': '/tmp/launch-cIj1tr/Render', 'JAVA_HOME': '/System/Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Home'}
-files = ['/Users/suzukihajime/docs/src/aln/simd/x86_64/wscript']
-hash = b'\x88\x12\x15%B\x1c\x1a\xb4g)|r<H\xe7\xc4'
-options = {'progress_bar': 0, 'top': '', 'colors': 'auto', 'check_c_compiler': None, 'destdir': '', 'prefix': '/usr/local/', 'files': '', 'targets': '', 'jobs': 4, 'keep': 0, 'out': '', 'distcheck_args': None, 'verbose': 0, 'force': False, 'zones': ''}
-out_dir = '/Users/suzukihajime/docs/src/aln/simd/x86_64/build'
-run_dir = '/Users/suzukihajime/docs/src/aln/simd/x86_64'
-top_dir = '/Users/suzukihajime/docs/src/aln/simd/x86_64'
