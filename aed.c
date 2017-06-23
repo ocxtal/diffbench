@@ -47,7 +47,7 @@ struct aed_fill_s aed_fill_search_minpos(
 	uint64_t dir = blk->dir<<(64 - j);
 
 	int64_t const score_max = INT32_MAX;
-	struct aed_fill_s hmin = { .score = score_max }, vmin = { .score = score_max };
+	struct aed_fill_s hmin = { .score = score_max, .blk = f.blk }, vmin = { .score = score_max, .blk = f.blk };
 
 	int64_t hscore = score_max, vscore = score_max;
 	for(int64_t i = 0; i < 128; i++) {
@@ -309,6 +309,7 @@ int64_t aed_trace(
 
 	if(blk < (struct aed_block_s *)base) {
 		/* no alignment found */
+		fprintf(stderr, "not found, blk(%p), base(%p)\n", blk, base);
 		buf[0] = '\0';
 		return(0);
 	}
