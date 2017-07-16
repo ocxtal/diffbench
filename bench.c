@@ -1,4 +1,6 @@
 
+//#define DEBUG
+
 /**
  * @file bench.c
  * @brief speed benchmark of libsea
@@ -22,6 +24,8 @@
 #define X 					( 1 )
 #define GI 					( 1 )
 #define GE 					( 1 )
+#define XDROP				( 40 )
+
 
 #include "ddiag.h"
 #include "diff.h"
@@ -672,7 +676,7 @@ struct bench_pair_s bench_gaba_linear(
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
-		.xdrop = 50,
+		.xdrop = XDROP,
 		GABA_SCORE_SIMPLE(M, X, 0, GI + GE)));
 
 	bench_t fill, trace, conv;
