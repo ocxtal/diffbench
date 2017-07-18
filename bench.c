@@ -207,6 +207,7 @@ int parse_args(struct params *p, int c, char *arg)
 	switch(c) {
 		case 'i': p->file = arg; break;
 		case 'l': p->max = atoi(arg); break;
+		case 'c': p->cnt = atoi(arg); break;
 		case 'f': p->frac = atof(arg); break;
 		case 'a': printf("%s\n", arg); return 0;
 		case 't': p->table = 1; return 0;
@@ -932,7 +933,7 @@ int main(int argc, char *argv[])
 
 	/** parse args */
 	int i;
-	while((i = getopt(argc, argv, "i:l:f:a:th")) != -1) {
+	while((i = getopt(argc, argv, "i:l:c:f:a:th")) != -1) {
 		if(parse_args(&p, i, optarg) != 0) { exit(1); }
 	}
 
