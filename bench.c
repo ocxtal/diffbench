@@ -15,6 +15,7 @@
 #include "aed.h"
 #include "gaba/gaba.h"
 #include "edlib.h"
+#include "ksw.h"
 #include "kvec.h"
 
 #define BIT_WIDTH			8
@@ -900,6 +901,45 @@ struct bench_pair_s bench_edlib(
 	});
 }
 
+static inline
+struct bench_pair_s bench_bwamem(
+	struct params p)
+{
+	/** init context */
+	bench_t fill, trace, conv;
+	bench_init(fill);
+	bench_init(trace);
+	bench_init(conv);
+
+	int8_t const mat[16] = { M, -X, -X, -X, -X, M, -X, -X, -X, -X, M, -X, -X, -X, -X, M };
+
+	int64_t score = 0;
+	for(int64_t i = 0; i < p.cnt; i++) {
+		int max_off;
+		uint64_t s[3] = {0};
+
+		bench_start(fill);
+		for(uint64_t i = 0; i < 2; i++) {
+			uint64_t w = 100<<i;
+			s[i+1] = ksw_extend2(
+				kv_at(p.len, i * 2), (uint8_t const *)kv_at(p.seq, i * 2),
+				kv_at(p.len, i * 2 + 1), (uint8_t const *)kv_at(p.seq, i * 2 + 1),
+				4, mat, GI, GE, GI, GE,
+				w, 0, 100, M * kv_at(p.len, i * 2), NULL, NULL, NULL, NULL, &max_off);
+			if(s[i] == s[i+1] || max_off < (w>>1) + (w>>2)) {
+				score += s[i+1]; break;
+			}
+		}
+		bench_end(fill);
+	}
+	return((struct bench_pair_s){
+		.fill = fill,
+		.trace = trace,
+		.conv = conv,
+		.score = score
+	});
+}
+
 
 static inline
 void print_result(
@@ -996,6 +1036,7 @@ int main(int argc, char *argv[])
 		kv_at(p.buf, i) = c;
 	}
 
+	/* our implementations prefer 4-bit encoding for the default, but 2-bit is also allowed when compilation flag is changed, calculation speeds do not depend on the input encodings */
 	print_result(p.table, bench_adaptive_editdist(p));
 	// print_result(p.table, bench_ddiag_linear(p));
 	print_result(p.table, bench_ddiag_affine(p));
@@ -1003,7 +1044,16 @@ int main(int argc, char *argv[])
 	print_result(p.table, bench_diff_affine(p));
 	// print_result(p.table, bench_gaba_linear(p));
 	print_result(p.table, bench_gaba_affine(p));
-	// print_result(p.table, bench_edlib(p));
+	// print_result(p.table, bench_edlib(p));		/* edlib allows any encoding since it transforms input sequences to internal representations */
+
+	/* convert to 2bit since score profile calculation overhead will be minimized with 2-bit encoding for the bwamem (ksw.c) implementation */
+	for(i = 0; i < kv_size(p.buf); i++) {
+		if(kv_at(p.buf, i) == '\0') { continue; }
+		uint8_t const trans[16] = { [1] = 0, [2] = 1, [4] = 2, [8] = 3 };
+		kv_at(p.buf, i) = trans[kv_at(p.buf, i)];
+	}
+
+	print_result(p.table, bench_bwamem(p));
 
 	if(p.table != 0) {
 		printf("\n");
