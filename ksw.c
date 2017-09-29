@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <emmintrin.h>
 #include "ksw.h"
+#include "bench.h"			/* modified */
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -501,6 +502,7 @@ static inline uint32_t *push_cigar(int *n_cigar, int *m_cigar, uint32_t *cigar, 
 	return cigar;
 }
 
+
 int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, uint32_t **cigar_)
 {
 	eh_t *eh;
@@ -601,6 +603,116 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			tmp = cigar[i], cigar[i] = cigar[n_cigar-1-i], cigar[n_cigar-1-i] = tmp;
 		*n_cigar_ = n_cigar, *cigar_ = cigar;
 	}
+	free(eh); free(qp); free(z);
+	return score;
+}
+int ksw_global2_bench(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, uint32_t **cigar_, bench_t *fill, bench_t *trace)
+{
+	eh_t *eh;
+	int8_t *qp; // query profile
+	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, score, n_col;
+	uint8_t *z; // backtrack matrix; in each cell: f<<4|e<<2|h; in principle, we can halve the memory, but backtrack will be a little more complex
+	if (n_cigar_) *n_cigar_ = 0;
+	// allocate memory
+	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
+	z = n_cigar_ && cigar_? malloc((long)n_col * tlen) : 0;
+	qp = malloc(qlen * m);
+	eh = calloc(qlen + 1, 8);
+
+	bench_start(*fill);		/* modified */
+	// generate the query profile
+	for (k = i = 0; k < m; ++k) {
+		const int8_t *p = &mat[k * m];
+		for (j = 0; j < qlen; ++j) qp[i++] = p[query[j]];
+	}
+	// fill the first row
+	eh[0].h = 0; eh[0].e = MINUS_INF;
+	for (j = 1; j <= qlen && j <= w; ++j)
+		eh[j].h = -(o_ins + e_ins * j), eh[j].e = MINUS_INF;
+	for (; j <= qlen; ++j) eh[j].h = eh[j].e = MINUS_INF; // everything is -inf outside the band
+	// DP loop
+	for (i = 0; LIKELY(i < tlen); ++i) { // target sequence is in the outer loop
+		int32_t f = MINUS_INF, h1, beg, end, t;
+		int8_t *q = &qp[target[i] * qlen];
+		beg = i > w? i - w : 0;
+		end = i + w + 1 < qlen? i + w + 1 : qlen; // only loop through [beg,end) of the query sequence
+		h1 = beg == 0? -(o_del + e_del * (i + 1)) : MINUS_INF;
+		if (n_cigar_ && cigar_) {
+			uint8_t *zi = &z[(long)i * n_col];
+			for (j = beg; LIKELY(j < end); ++j) {
+				// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
+				// Cells are computed in the following order:
+				//   M(i,j)   = H(i-1,j-1) + S(i,j)
+				//   H(i,j)   = max{M(i,j), E(i,j), F(i,j)}
+				//   E(i+1,j) = max{M(i,j)-gapo, E(i,j)} - gape
+				//   F(i,j+1) = max{M(i,j)-gapo, F(i,j)} - gape
+				// We have to separate M(i,j); otherwise the direction may not be recorded correctly.
+				// However, a CIGAR like "10M3I3D10M" allowed by local() is disallowed by global().
+				// Such a CIGAR may occur, in theory, if mismatch_penalty > 2*gap_ext_penalty + 2*gap_open_penalty/k.
+				// In practice, this should happen very rarely given a reasonable scoring system.
+				eh_t *p = &eh[j];
+				int32_t h, m = p->h, e = p->e;
+				uint8_t d; // direction
+				p->h = h1;
+				m += q[j];
+				d = m >= e? 0 : 1;
+				h = m >= e? m : e;
+				d = h >= f? d : 2;
+				h = h >= f? h : f;
+				h1 = h;
+				t = m - oe_del;
+				e -= e_del;
+				d |= e > t? 1<<2 : 0;
+				e  = e > t? e    : t;
+				p->e = e;
+				t = m - oe_ins;
+				f -= e_ins;
+				d |= f > t? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
+				f  = f > t? f    : t;
+				zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
+			}
+		} else {
+			for (j = beg; LIKELY(j < end); ++j) {
+				eh_t *p = &eh[j];
+				int32_t h, m = p->h, e = p->e;
+				p->h = h1;
+				m += q[j];
+				h = m >= e? m : e;
+				h = h >= f? h : f;
+				h1 = h;
+				t = m - oe_del;
+				e -= e_del;
+				e  = e > t? e : t;
+				p->e = e;
+				t = m - oe_ins;
+				f -= e_ins;
+				f  = f > t? f : t;
+			}
+		}
+		eh[end].h = h1; eh[end].e = MINUS_INF;
+	}
+	score = eh[qlen].h;
+	bench_end(*fill);		/* modified */
+
+	bench_start(*trace);	/* modified */
+	if (n_cigar_ && cigar_) { // backtrack
+		int n_cigar = 0, m_cigar = 0, which = 0;
+		uint32_t *cigar = 0, tmp;
+		i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
+		while (i >= 0 && k >= 0) {
+			which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
+			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
+			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
+			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
+		}
+		if (i >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, i + 1);
+		if (k >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, k + 1);
+		for (i = 0; i < n_cigar>>1; ++i) // reverse CIGAR
+			tmp = cigar[i], cigar[i] = cigar[n_cigar-1-i], cigar[n_cigar-1-i] = tmp;
+		*n_cigar_ = n_cigar, *cigar_ = cigar;
+	}
+	bench_end(*trace);		/* modified */
+
 	free(eh); free(qp); free(z);
 	return score;
 }

@@ -21,7 +21,7 @@ gaba_affine.o: gaba/gaba.c
 gaba_wrap.o: gaba/gaba_wrap.c
 	$(CC) -c $(CFLAGS) $<
 
-bench: bench.o aed.o alinear.o aaffine.o rlinear.o raffine.o gaba_wrap.o gaba_linear.o gaba_affine.o edlib.o ksw.o
+bench: bench.o aed.o alinear.o aaffine.o rlinear.o raffine.o gaba_wrap.o gaba_linear.o gaba_affine.o edlib.o ksw.o DB.o QV.o align.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
 clean:

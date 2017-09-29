@@ -17,6 +17,14 @@
 #include "edlib.h"
 #include "ksw.h"
 #include "kvec.h"
+#include "align.h"
+
+int enlarge_vector(Work_Data *work, int newmax);
+int enlarge_points(Work_Data *work, int newmax);
+int forward_wave(Work_Data *work, Align_Spec *spec, Alignment *align, Path *bpath,
+                        int *mind, int maxd, int mida, int minp, int maxp);
+int reverse_wave(Work_Data *work, Align_Spec *spec, Alignment *align, Path *bpath,
+                        int mind, int maxd, int mida, int minp, int maxp);
 
 #define BIT_WIDTH			8
 #define BAND_WIDTH 			32
@@ -912,34 +920,125 @@ struct bench_pair_s bench_bwamem(
 	bench_init(conv);
 
 	int8_t const mat[16] = { M, -X, -X, -X, -X, M, -X, -X, -X, -X, M, -X, -X, -X, -X, M };
-
-	int64_t score = 0;
+	uint32_t *cigar = malloc(sizeof(uint32_t) * 10000);
 	for(int64_t i = 0; i < p.cnt; i++) {
-		int max_off;
+		int max_off, rlen, qlen;
 		uint64_t s[3] = {0};
 
-		bench_start(fill);
-		for(uint64_t i = 0; i < 2; i++) {
-			uint64_t w = 100<<i;
-			s[i+1] = ksw_extend2(
-				kv_at(p.len, i * 2), (uint8_t const *)kv_at(p.seq, i * 2),
-				kv_at(p.len, i * 2 + 1), (uint8_t const *)kv_at(p.seq, i * 2 + 1),
-				4, mat, GI, GE, GI, GE,
-				w, 0, 100, M * kv_at(p.len, i * 2), NULL, NULL, NULL, NULL, &max_off);
-			if(s[i] == s[i+1] || max_off < (w>>1) + (w>>2)) {
-				score += s[i+1]; break;
-			}
-		}
-		bench_end(fill);
+		/*
+		s[i+1] = ksw_extend2(
+			kv_at(p.len, i * 2), (uint8_t const *)kv_at(p.seq, i * 2),
+			kv_at(p.len, i * 2 + 1), (uint8_t const *)kv_at(p.seq, i * 2 + 1),
+			4, mat, GI, GE, GI, GE,
+			100, 0, 100, M * kv_at(p.len, i * 2), &rlen, &qlen, NULL, NULL, &max_off);
+		*/
+		int w = abs(kv_at(p.len, i * 2) - kv_at(p.len, i * 2 + 1)) + 3;
+		int n_cigar = 0;
+		ksw_global2_bench(
+			kv_at(p.len, i * 2), (uint8_t const *)kv_at(p.seq, i * 2),
+			kv_at(p.len, i * 2 + 1), (uint8_t const *)kv_at(p.seq, i * 2 + 1),
+			4, mat, GI, GE, GI, GE, w, &n_cigar, &cigar,
+			&fill, &trace);
 	}
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
-		.conv = conv,
-		.score = score
+		.conv = conv
 	});
 }
 
+
+struct wavefront_work_s {
+	Work_Data *w;
+	Align_Spec *s;
+	Path apath, bpath;
+};
+
+struct wavefront_work_s *wavefront_init_work(double id)
+{
+	struct wavefront_work_s *work = (struct wavefront_work_s *)malloc(sizeof(struct wavefront_work_s));
+
+	Work_Data *w = New_Work_Data();
+	enlarge_vector(w, 10000 * (6 * sizeof(int) + sizeof(uint64_t)));
+	enlarge_points(w, 4 * 4096 / 100 * sizeof(uint16_t) + sizeof(Path));
+
+
+	float freq[4] = { 0.25, 0.25, 0.25, 0.25 };
+	Align_Spec *s = New_Align_Spec(id, 100, freq);
+
+
+	work->w = w;
+	work->s = s;
+	work->apath.trace = malloc(4096);
+	work->bpath.trace = malloc(4096);
+
+	return(work);
+}
+
+
+void wavefront_clean_work(struct wavefront_work_s *_work)
+{
+	struct wavefront_work_s *work = (struct wavefront_work_s *)_work;
+
+	free(work->apath.trace);
+	free(work->bpath.trace);
+
+	Free_Align_Spec(work->s);
+	Free_Work_Data(work->w);
+
+	free(work);
+	return;	
+}
+
+int 
+wavefront(
+	void *_work,
+	char const *a,
+	uint64_t alen,
+	char const *b,
+	uint64_t blen)
+{
+	struct wavefront_work_s *work = (struct wavefront_work_s *)_work;
+	Work_Data *w = work->w;
+	Align_Spec *s = work->s;
+
+	Alignment aln;
+	aln.path = &work->apath;
+	aln.flags = 0;
+	aln.aseq = (char *)a;
+	aln.bseq = (char *)b;
+	aln.alen = alen;
+	aln.blen = blen;
+
+	int low = 0;
+	int high = 0;
+
+	forward_wave(w, s, &aln, &work->bpath, &low, high, 0, -INT32_MAX, INT32_MAX);
+	// fprintf(stderr, "(%u, %u), (%u, %u)\n", alen, blen, aln.path->aepos, aln.path->bepos);
+	return(aln.path->aepos + aln.path->bepos);
+}
+
+static inline
+struct bench_pair_s bench_wavefront(
+	struct params p)
+{
+	/** init context */
+	bench_t fill;
+	bench_init(fill);
+
+	struct wavefront_work_s *wwork = wavefront_init_work(0.7);
+	for(int64_t i = 0; i < p.cnt; i++) {
+		bench_start(fill);
+		wavefront(wwork, 
+			(uint8_t const *)kv_at(p.seq, i * 2), kv_at(p.len, i * 2),
+			(uint8_t const *)kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1));
+		bench_end(fill);
+	}
+	wavefront_clean_work(wwork);
+	return((struct bench_pair_s){
+		.fill = fill
+	});
+}
 
 static inline
 void print_result(
@@ -1054,6 +1153,7 @@ int main(int argc, char *argv[])
 	}
 
 	print_result(p.table, bench_bwamem(p));
+	print_result(p.table, bench_wavefront(p));
 
 	if(p.table != 0) {
 		printf("\n");
