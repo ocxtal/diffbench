@@ -889,7 +889,7 @@ struct bench_pair_s bench_edlib(
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		// int64_t klim = MAX2((int64_t)(1.5 * (double)(kv_at(p.len, i * 2) + kv_at(p.len, i * 2 + 1)) * 0.2 + 0.5), 10);
-		int64_t klim = 1000;
+		int64_t klim = 5000;
 		EdlibAlignConfig cf = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
 		EdlibAlignConfig ct = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_PATH };
 
