@@ -26,6 +26,13 @@ int forward_wave(Work_Data *work, Align_Spec *spec, Alignment *align, Path *bpat
 int reverse_wave(Work_Data *work, Align_Spec *spec, Alignment *align, Path *bpath,
                         int mind, int maxd, int mida, int minp, int maxp);
 
+int blast_affine(
+	void *work,
+	char const *a,
+	uint64_t alen,
+	char const *b,
+	uint64_t blen,
+	int8_t *score_matrix, int8_t gi, int8_t ge, int16_t xt);
 
 #ifdef COUNT_CELLS
 extern uint64_t edlib_blocks;
@@ -873,6 +880,29 @@ struct bench_pair_s bench_gaba_affine(
 }
 
 static inline
+void build_score_matrix(int8_t *matrix, int8_t m, int8_t x)
+{
+	int i = 0;
+	matrix[i++] = m;	// (A, A)
+	matrix[i++] = x;	// (C, A)
+	matrix[i++] = x;	// (G, A)
+	matrix[i++] = x;	// (T, A)
+	matrix[i++] = x;	// (A, C)
+	matrix[i++] = m;	// (C, C)
+	matrix[i++] = x;	// (G, C)
+	matrix[i++] = x;	// (T, C)
+	matrix[i++] = x;	// (A, G)
+	matrix[i++] = x;	// (C, G)
+	matrix[i++] = m;	// (G, G)
+	matrix[i++] = x;	// (T, G)
+	matrix[i++] = x;	// (A, T)
+	matrix[i++] = x;	// (C, T)
+	matrix[i++] = x;	// (G, T)
+	matrix[i++] = m;	// (T, T)
+	return;
+}
+
+static inline
 struct bench_pair_s bench_blast(
 	struct params p)
 {
@@ -900,7 +930,7 @@ struct bench_pair_s bench_blast(
 	free(work);
 
 	#ifdef COUNT_CELLS
-	fprintf(stderr, "cells(%llu)\n", blast_cells * 64);
+	fprintf(stderr, "cells(%llu)\n", blast_cells);
 	#endif
 
 	return((struct bench_pair_s){
@@ -1224,6 +1254,7 @@ int main(int argc, char *argv[])
 	print_result(p.table, bench_gaba_affine(p));
 	print_result(p.table, bench_edlib(p));		/* edlib allows any encoding since it transforms input sequences to internal representations */
 
+	print_result(p.table, bench_blast(p));
 	print_result(p.table, bench_seqan(p));
 	print_result(p.table, bench_wavefront(p));
 

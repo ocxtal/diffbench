@@ -1,5 +1,5 @@
 
-FLAGS = -O3 -Wall -Wno-unused-function -march=native -DBENCH -DEDLIB_COUNT_BLOCKS -I.
+FLAGS = -O3 -Wall -Wno-unused-function -march=native -DBENCH -DCOUNT_CELLS -I.
 
 CC = gcc
 CFLAGS = $(FLAGS) -std=c99
@@ -27,7 +27,7 @@ gaba_wrap.o: gaba/gaba_wrap.c
 seqan_wrap.o: seqan_wrap.cc
 	$(CXX) -c $(CXXFLAGS) $<
 
-bench: bench.o aed.o alinear.o aaffine.o rlinear.o raffine.o gaba_wrap.o gaba_linear.o gaba_affine.o edlib.o ksw.o DB.o QV.o align.o seqan_wrap.o
+bench: bench.o aed.o alinear.o aaffine.o rlinear.o raffine.o gaba_wrap.o gaba_linear.o gaba_affine.o edlib.o ksw.o DB.o QV.o align.o seqan_wrap.o blast.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
 clean:
