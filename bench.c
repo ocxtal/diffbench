@@ -899,6 +899,7 @@ struct bench_pair_s bench_edlib(
 
 		edlibFreeAlignResult(f);
 
+		#ifndef EDLIB_COUNT_BLOCKS
 		bench_start(trace);
 		EdlibAlignResult t = edlibAlign(kv_at(p.seq, i * 2), kv_at(p.len, i * 2), kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1), ct);
 		score += t.editDistance;
@@ -910,6 +911,7 @@ struct bench_pair_s bench_edlib(
 		free(cigar);
 
 		edlibFreeAlignResult(t);
+		#endif
 	}
 
 	trace.a -= fill.a;
