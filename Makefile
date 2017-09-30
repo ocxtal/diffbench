@@ -5,7 +5,7 @@ CC = gcc
 CFLAGS = $(FLAGS) -std=c99
 
 CXX = g++
-CXXFLAGS = $(FLAGS) -std=c++11
+CXXFLAGS = $(FLAGS) -std=c++14
 
 all: bench
 
@@ -24,7 +24,10 @@ gaba_affine.o: gaba/gaba.c
 gaba_wrap.o: gaba/gaba_wrap.c
 	$(CC) -c $(CFLAGS) $<
 
-bench: bench.o aed.o alinear.o aaffine.o rlinear.o raffine.o gaba_wrap.o gaba_linear.o gaba_affine.o edlib.o ksw.o DB.o QV.o align.o
+seqan_wrap.o: seqan_wrap.cc
+	$(CXX) -c $(CXXFLAGS) $<
+
+bench: bench.o aed.o alinear.o aaffine.o rlinear.o raffine.o gaba_wrap.o gaba_linear.o gaba_affine.o edlib.o ksw.o DB.o QV.o align.o seqan_wrap.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
 clean:

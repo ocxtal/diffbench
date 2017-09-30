@@ -31,6 +31,9 @@ int reverse_wave(Work_Data *work, Align_Spec *spec, Alignment *align, Path *bpat
 extern uint64_t edlib_blocks;
 #endif
 
+int seqan_editdist(uint8_t const *a, uint8_t const *b);
+
+
 #define BIT_WIDTH			8
 #define BAND_WIDTH 			32
 
@@ -1033,6 +1036,24 @@ wavefront(
 }
 
 static inline
+struct bench_pair_s bench_seqan(
+	struct params p)
+{
+	/** init context */
+	bench_t fill;
+	bench_init(fill);
+
+	for(int64_t i = 0; i < p.cnt; i++) {
+		bench_start(fill);
+		seqan_editdist((uint8_t const *)kv_at(p.seq, i * 2), (uint8_t const *)kv_at(p.seq, i * 2 + 1));
+		bench_end(fill);
+	}
+	return((struct bench_pair_s){
+		.fill = fill
+	});
+}
+
+static inline
 struct bench_pair_s bench_wavefront(
 	struct params p)
 {
@@ -1167,6 +1188,7 @@ int main(int argc, char *argv[])
 	}
 
 	print_result(p.table, bench_bwamem(p));
+	print_result(p.table, bench_seqan(p));
 	print_result(p.table, bench_wavefront(p));
 
 	if(p.table != 0) {
