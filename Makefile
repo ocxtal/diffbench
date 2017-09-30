@@ -1,8 +1,11 @@
+
+FLAGS = -O3 -Wall -Wno-unused-function -march=native -DBENCH -DEDLIB_COUNT_BLOCKS
+
 CC = gcc
-CFLAGS = -O3 -Wall -Wno-unused-function -march=native -std=c99 -DBENCH
+CFLAGS = $(FLAGS) -std=c99
 
 CXX = g++
-CXXFLAGS = -O3 -Wall -Wno-unused-function -march=native -std=c++11 -DBENCH
+CXXFLAGS = $(FLAGS) -std=c++11
 
 all: bench
 

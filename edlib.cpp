@@ -14,6 +14,10 @@ static const int WORD_SIZE = sizeof(Word) * 8; // Size of Word in bits
 static const Word WORD_1 = (Word)1;
 static const Word HIGH_BIT_MASK = WORD_1 << (WORD_SIZE - 1);  // 100..00
 
+#ifdef EDLIB_COUNT_BLOCKS
+uint64_t edlib_blocks = 0;
+#endif
+
 // Data needed to find alignment.
 struct AlignmentData {
     Word* Ps;
@@ -334,6 +338,10 @@ static inline unsigned char* createReverseCopy(const unsigned char* const seq, c
  */
 static inline int calculateBlock(Word Pv, Word Mv, Word Eq, const int hin,
                                  Word &PvOut, Word &MvOut) {
+    #ifdef EDLIB_COUNT_BLOCKS
+        edlib_blocks++;
+    #endif
+
     // hin can be 1, -1 or 0.
     // 1  -> 00...01
     // 0  -> 00...00

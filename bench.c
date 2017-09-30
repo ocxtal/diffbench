@@ -26,6 +26,11 @@ int forward_wave(Work_Data *work, Align_Spec *spec, Alignment *align, Path *bpat
 int reverse_wave(Work_Data *work, Align_Spec *spec, Alignment *align, Path *bpath,
                         int mind, int maxd, int mida, int minp, int maxp);
 
+
+#ifdef EDLIB_COUNT_BLOCKS
+extern uint64_t edlib_blocks;
+#endif
+
 #define BIT_WIDTH			8
 #define BAND_WIDTH 			32
 
@@ -873,6 +878,11 @@ struct bench_pair_s bench_edlib(
 	bench_init(trace);
 	bench_init(conv);
 
+	#ifdef EDLIB_COUNT_BLOCKS
+	edlib_blocks = 0;
+	#endif
+
+
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		int64_t klim = MAX2((int64_t)(1.5 * (double)(kv_at(p.len, i * 2) + kv_at(p.len, i * 2 + 1)) * 0.2 + 0.5), 10);
@@ -900,6 +910,10 @@ struct bench_pair_s bench_edlib(
 	}
 
 	trace.a -= fill.a;
+
+	#ifdef EDLIB_COUNT_BLOCKS
+	fprintf(stderr, "blocks(%llu), cells(%llu)\n", edlib_blocks, edlib_blocks * 64);
+	#endif
 
 	return((struct bench_pair_s){
 		.fill = fill,
@@ -1143,7 +1157,7 @@ int main(int argc, char *argv[])
 	print_result(p.table, bench_diff_affine(p));
 	// print_result(p.table, bench_gaba_linear(p));
 	print_result(p.table, bench_gaba_affine(p));
-	// print_result(p.table, bench_edlib(p));		/* edlib allows any encoding since it transforms input sequences to internal representations */
+	print_result(p.table, bench_edlib(p));		/* edlib allows any encoding since it transforms input sequences to internal representations */
 
 	/* convert to 2bit since score profile calculation overhead will be minimized with 2-bit encoding for the bwamem (ksw.c) implementation */
 	for(i = 0; i < kv_size(p.buf); i++) {
