@@ -1180,6 +1180,9 @@ int main(int argc, char *argv[])
 	print_result(p.table, bench_gaba_affine(p));
 	print_result(p.table, bench_edlib(p));		/* edlib allows any encoding since it transforms input sequences to internal representations */
 
+	print_result(p.table, bench_seqan(p));
+	print_result(p.table, bench_wavefront(p));
+
 	/* convert to 2bit since score profile calculation overhead will be minimized with 2-bit encoding for the bwamem (ksw.c) implementation */
 	for(i = 0; i < kv_size(p.buf); i++) {
 		if(kv_at(p.buf, i) == '\0') { continue; }
@@ -1188,8 +1191,6 @@ int main(int argc, char *argv[])
 	}
 
 	print_result(p.table, bench_bwamem(p));
-	print_result(p.table, bench_seqan(p));
-	print_result(p.table, bench_wavefront(p));
 
 	if(p.table != 0) {
 		printf("\n");
