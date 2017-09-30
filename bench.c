@@ -889,13 +889,13 @@ struct bench_pair_s bench_edlib(
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		// int64_t klim = MAX2((int64_t)(1.5 * (double)(kv_at(p.len, i * 2) + kv_at(p.len, i * 2 + 1)) * 0.2 + 0.5), 10);
-		int64_t klim = 5000;
+		int64_t klim = 10000;
 		EdlibAlignConfig cf = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
 		EdlibAlignConfig ct = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_PATH };
 
 		bench_start(fill);
 		EdlibAlignResult f = edlibAlign(kv_at(p.seq, i * 2), kv_at(p.len, i * 2), kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1), cf);
-		score += f.editDistance;
+		score += f.editDistance < 0;
 		bench_end(fill);
 
 		edlibFreeAlignResult(f);
@@ -903,7 +903,6 @@ struct bench_pair_s bench_edlib(
 		#ifndef EDLIB_COUNT_BLOCKS
 		bench_start(trace);
 		EdlibAlignResult t = edlibAlign(kv_at(p.seq, i * 2), kv_at(p.len, i * 2), kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1), ct);
-		score += t.editDistance;
 		bench_end(trace);
 		
 		bench_start(conv);
@@ -934,6 +933,7 @@ struct bench_pair_s bench_bwamem(
 	struct params p)
 {
 	/** init context */
+	uint64_t cells = 0;
 	bench_t fill, trace, conv;
 	bench_init(fill);
 	bench_init(trace);
@@ -959,11 +959,13 @@ struct bench_pair_s bench_bwamem(
 			kv_at(p.len, i * 2 + 1), (uint8_t const *)kv_at(p.seq, i * 2 + 1),
 			4, mat, GI, GE, GI, GE, w, &n_cigar, &cigar,
 			&fill, &trace);
+		cells += w * kv_at(p.len, i * 2 + 1);
 	}
 	return((struct bench_pair_s){
 		.fill = fill,
 		.trace = trace,
-		.conv = conv
+		.conv = conv,
+		.fail = cells
 	});
 }
 

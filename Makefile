@@ -1,5 +1,5 @@
 
-FLAGS = -O3 -Wall -Wno-unused-function -march=native -DBENCH -I.
+FLAGS = -O3 -Wall -Wno-unused-function -march=native -DBENCH -DEDLIB_COUNT_BLOCKS -I.
 
 CC = gcc
 CFLAGS = $(FLAGS) -std=c99
