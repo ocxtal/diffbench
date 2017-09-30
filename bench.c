@@ -924,7 +924,7 @@ struct bench_pair_s bench_blast(
 		score += blast_affine(
 			work,
 			kv_at(p.seq, i * 2), kv_at(p.len, i * 2), kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1),
-			score_matrix, GI, GE, XDROP);
+			score_matrix, GI, GE, 70);
 		bench_end(fill);
 	}
 	free(work);
