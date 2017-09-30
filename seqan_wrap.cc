@@ -1,6 +1,6 @@
 
 #include <string>           // std::string
-#include <seqan/align.h>    // base header of SeqAn::align
+#include "seqan/align.h"    // base header of SeqAn::align
 #include <stdint.h>
 
 using namespace seqan;
