@@ -14,7 +14,7 @@ static const int WORD_SIZE = sizeof(Word) * 8; // Size of Word in bits
 static const Word WORD_1 = (Word)1;
 static const Word HIGH_BIT_MASK = WORD_1 << (WORD_SIZE - 1);  // 100..00
 
-#ifdef EDLIB_COUNT_BLOCKS
+#ifdef COUNT_CELLS
 uint64_t edlib_blocks = 0;
 #endif
 
@@ -338,7 +338,7 @@ static inline unsigned char* createReverseCopy(const unsigned char* const seq, c
  */
 static inline int calculateBlock(Word Pv, Word Mv, Word Eq, const int hin,
                                  Word &PvOut, Word &MvOut) {
-    #ifdef EDLIB_COUNT_BLOCKS
+    #ifdef COUNT_CELLS
         edlib_blocks++;
     #endif
 

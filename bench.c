@@ -27,8 +27,9 @@ int reverse_wave(Work_Data *work, Align_Spec *spec, Alignment *align, Path *bpat
                         int mind, int maxd, int mida, int minp, int maxp);
 
 
-#ifdef EDLIB_COUNT_BLOCKS
+#ifdef COUNT_CELLS
 extern uint64_t edlib_blocks;
+extern uint64_t blast_cells;
 #endif
 
 int seqan_editdist(uint8_t const *a, uint8_t const *b);
@@ -872,6 +873,44 @@ struct bench_pair_s bench_gaba_affine(
 }
 
 static inline
+struct bench_pair_s bench_blast(
+	struct params p)
+{
+	/** init context */
+	bench_t fill;
+	bench_init(fill);
+
+	#ifdef COUNT_CELLS
+	blast_cells = 0;
+	#endif
+
+	void *work = aligned_malloc(1024 * 1024 * 1024);
+	int8_t score_matrix[16] __attribute__(( aligned(16) ));
+	build_score_matrix(score_matrix, M, -X);
+
+	int64_t score = 0;
+	for(int64_t i = 0; i < p.cnt; i++) {
+		bench_start(fill);
+		score += blast_affine(
+			work,
+			kv_at(p.seq, i * 2), kv_at(p.len, i * 2), kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1),
+			score_matrix, GI, GE, XDROP);
+		bench_end(fill);
+	}
+	free(work);
+
+	#ifdef COUNT_CELLS
+	fprintf(stderr, "cells(%llu)\n", blast_cells * 64);
+	#endif
+
+	return((struct bench_pair_s){
+		.fill = fill,
+		.score = score
+	});
+}
+
+
+static inline
 struct bench_pair_s bench_edlib(
 	struct params p)
 {
@@ -881,7 +920,7 @@ struct bench_pair_s bench_edlib(
 	bench_init(trace);
 	bench_init(conv);
 
-	#ifdef EDLIB_COUNT_BLOCKS
+	#ifdef COUNT_CELLS
 	edlib_blocks = 0;
 	#endif
 
@@ -889,7 +928,7 @@ struct bench_pair_s bench_edlib(
 	int64_t score = 0;
 	for(int64_t i = 0; i < p.cnt; i++) {
 		// int64_t klim = MAX2((int64_t)(1.5 * (double)(kv_at(p.len, i * 2) + kv_at(p.len, i * 2 + 1)) * 0.2 + 0.5), 10);
-		int64_t klim = 10000;
+		int64_t klim = 5000;
 		EdlibAlignConfig cf = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_DISTANCE };
 		EdlibAlignConfig ct = (EdlibAlignConfig){ .k = klim, .mode = EDLIB_MODE_SHW, .task = EDLIB_TASK_PATH };
 
@@ -900,7 +939,7 @@ struct bench_pair_s bench_edlib(
 
 		edlibFreeAlignResult(f);
 
-		#ifndef EDLIB_COUNT_BLOCKS
+		#ifndef COUNT_CELLS
 		bench_start(trace);
 		EdlibAlignResult t = edlibAlign(kv_at(p.seq, i * 2), kv_at(p.len, i * 2), kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1), ct);
 		bench_end(trace);
@@ -916,7 +955,7 @@ struct bench_pair_s bench_edlib(
 
 	trace.a -= fill.a;
 
-	#ifdef EDLIB_COUNT_BLOCKS
+	#ifdef COUNT_CELLS
 	fprintf(stderr, "blocks(%llu), cells(%llu)\n", edlib_blocks, edlib_blocks * 64);
 	#endif
 
