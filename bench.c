@@ -18,6 +18,8 @@
 #include "ksw.h"
 #include "kvec.h"
 #include "align.h"
+#include "parasail.h"
+
 
 int enlarge_vector(Work_Data *work, int newmax);
 int enlarge_points(Work_Data *work, int newmax);
@@ -1138,12 +1140,34 @@ struct bench_pair_s bench_wavefront(
 	struct wavefront_work_s *wwork = wavefront_init_work(0.7);
 	for(int64_t i = 0; i < p.cnt; i++) {
 		bench_start(fill);
-		wavefront(wwork, 
+		wavefront(wwork,
 			(uint8_t const *)kv_at(p.seq, i * 2), kv_at(p.len, i * 2),
 			(uint8_t const *)kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1));
 		bench_end(fill);
 	}
 	wavefront_clean_work(wwork);
+	return((struct bench_pair_s){
+		.fill = fill
+	});
+}
+
+static inline
+struct bench_pair_s bench_parasail(
+	struct params p)
+{
+	bench_t fill;
+	bench_init(fill);
+
+	parasail_matrix_t *_matrix = parasail_matrix_create("ACGT", M, -X);
+	for(int64_t i = 0; i < p.cnt; i++) {
+		bench_start(fill);
+		parasail_result_t *r = parasail_sg_striped_avx2_256_16(
+			(uint8_t const *)kv_at(p.seq, i * 2), kv_at(p.len, i * 2),
+			(uint8_t const *)kv_at(p.seq, i * 2 + 1), kv_at(p.len, i * 2 + 1),
+			-GI-GE, -GE, _matrix);
+		bench_end(fill);
+		parasail_result_free(r);
+	}
 	return((struct bench_pair_s){
 		.fill = fill
 	});
@@ -1257,6 +1281,7 @@ int main(int argc, char *argv[])
 	print_result(p.table, bench_blast(p));
 	print_result(p.table, bench_seqan(p));
 	print_result(p.table, bench_wavefront(p));
+	print_result(p.table, bench_parasail(p));
 
 	/* convert to 2bit since score profile calculation overhead will be minimized with 2-bit encoding for the bwamem (ksw.c) implementation */
 	for(i = 0; i < kv_size(p.buf); i++) {
