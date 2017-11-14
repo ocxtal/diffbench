@@ -27,7 +27,7 @@ gaba_wrap.o: gaba/gaba_wrap.c
 seqan_wrap.o: seqan_wrap.cc
 	$(CXX) -c $(CXXFLAGS) $<
 
-parasail: parasail/cpuid.c parasail/io.c parasail/matrix_lookup.c parasail/memory.c parasail/memory_avx2.c parasail/time.c parasail/sg_striped_avx2_256_16.c
+parasail/cpuid.o parasail/io.o parasail/matrix_lookup.o parasail/memory.o parasail/memory_avx2.o parasail/time.o parasail/sg_striped_avx2_256_16.o: parasail/cpuid.c parasail/io.c parasail/matrix_lookup.c parasail/memory.c parasail/memory_avx2.c parasail/time.c parasail/sg_striped_avx2_256_16.c
 	$(CC) $(CFLAGS) -c -o parasail/cpuid.o -I. parasail/cpuid.c
 	$(CC) $(CFLAGS) -c -o parasail/io.o -I. parasail/io.c
 	$(CC) $(CFLAGS) -c -o parasail/matrix_lookup.o -I. parasail/matrix_lookup.c
