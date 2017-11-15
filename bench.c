@@ -1268,6 +1268,12 @@ int main(int argc, char *argv[])
 		kv_at(p.buf, i) = c;
 	}
 
+	uint64_t cells = 0;
+	for(i = 0; i < kv_size(p.len)/2; i++) {
+		cells += kv_at(p.len, i*2) * kv_at(p.len, i*2+1);
+	}
+	printf("cells(%llu)\n", cells);
+
 	/* our implementations prefer 4-bit encoding for the default, but 2-bit is also allowed when compilation flag is changed, calculation speeds do not depend on the input encodings */
 	print_result(p.table, bench_adaptive_editdist(p));
 	// print_result(p.table, bench_ddiag_linear(p));
@@ -1276,12 +1282,12 @@ int main(int argc, char *argv[])
 	print_result(p.table, bench_diff_affine(p));
 	// print_result(p.table, bench_gaba_linear(p));
 	print_result(p.table, bench_gaba_affine(p));
+	print_result(p.table, bench_parasail(p));
 	print_result(p.table, bench_edlib(p));		/* edlib allows any encoding since it transforms input sequences to internal representations */
 
 	print_result(p.table, bench_blast(p));
 	print_result(p.table, bench_seqan(p));
 	print_result(p.table, bench_wavefront(p));
-	print_result(p.table, bench_parasail(p));
 
 	/* convert to 2bit since score profile calculation overhead will be minimized with 2-bit encoding for the bwamem (ksw.c) implementation */
 	for(i = 0; i < kv_size(p.buf); i++) {
