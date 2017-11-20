@@ -1278,19 +1278,19 @@ int main(int argc, char *argv[])
 	printf("cells(%llu)\n", cells);
 
 	/* our implementations prefer 4-bit encoding for the default, but 2-bit is also allowed when compilation flag is changed, calculation speeds do not depend on the input encodings */
-	print_result(p.table, "editdist" bench_adaptive_editdist(p));
-	// print_result(p.table, "non-diff (linear)" bench_ddiag_linear(p));
-	print_result(p.table, "non-diff" bench_ddiag_affine(p));
-	// print_result(p.table, "diff-raw (linear)" bench_diff_linear(p));
-	print_result(p.table, "diff-raw" bench_diff_affine(p));
-	// print_result(p.table, "libgaba (linear)" bench_gaba_linear(p));
-	print_result(p.table, "libgaba" bench_gaba_affine(p));
-	print_result(p.table, "parasail" bench_parasail(p));
-	print_result(p.table, "edlib" bench_edlib(p));		/* edlib allows any encoding since it transforms input sequences to internal representations */
+	print_result(p.table, "editdist", bench_adaptive_editdist(p));
+	// print_result(p.table, "non-diff (linear)", bench_ddiag_linear(p));
+	print_result(p.table, "non-diff", bench_ddiag_affine(p));
+	// print_result(p.table, "diff-raw (linear)", bench_diff_linear(p));
+	print_result(p.table, "diff-raw", bench_diff_affine(p));
+	// print_result(p.table, "libgaba (linear)", bench_gaba_linear(p));
+	print_result(p.table, "libgaba", bench_gaba_affine(p));
+	print_result(p.table, "parasail", bench_parasail(p));
+	print_result(p.table, "edlib", bench_edlib(p));		/* edlib allows any encoding since it transforms input sequences to internal representations */
 
-	print_result(p.table, "blast" bench_blast(p));
-	print_result(p.table, "seqan" bench_seqan(p));
-	print_result(p.table, "wavefront" bench_wavefront(p));
+	print_result(p.table, "blast", bench_blast(p));
+	print_result(p.table, "seqan", bench_seqan(p));
+	print_result(p.table, "wavefront", bench_wavefront(p));
 
 	/* convert to 2bit since score profile calculation overhead will be minimized with 2-bit encoding for the bwamem (ksw.c) implementation */
 	for(i = 0; i < kv_size(p.buf); i++) {
