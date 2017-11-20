@@ -1,5 +1,5 @@
 
-FLAGS = -O3 -Wall -Wno-unused-function -march=native -DBENCH -DCOUNT_CELLS -I.
+FLAGS = -O3 -Wall -Wno-unused-function -march=native -DBENCH -I.
 
 CC = gcc
 CFLAGS = $(FLAGS) -std=c99
