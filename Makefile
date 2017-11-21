@@ -41,4 +41,4 @@ bench: bench.o aed.o alinear.o aaffine.o rlinear.o raffine.o gaba_wrap.o gaba_li
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
 clean:
-	rm -rf bench *.o
+	rm -rf bench *.o parasail/*.o
